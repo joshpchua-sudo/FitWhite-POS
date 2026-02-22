@@ -56,7 +56,21 @@ export interface Customer {
   email?: string;
   phone?: string;
   store_credit: number;
+  allergies?: string;
+  notes?: string;
   created_at: string;
+}
+
+export interface Treatment {
+  id: number;
+  customer_id: number;
+  treatment_name: string;
+  dosage?: string;
+  notes?: string;
+  administered_by?: string;
+  branch_id?: string;
+  branch_name?: string;
+  timestamp: string;
 }
 
 export interface DailySummary {

@@ -62,7 +62,22 @@ db.exec(`
     email TEXT,
     phone TEXT,
     store_credit REAL DEFAULT 0,
+    allergies TEXT,
+    notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS treatment_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    treatment_name TEXT NOT NULL,
+    dosage TEXT,
+    notes TEXT,
+    administered_by TEXT,
+    branch_id TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS product_variants (
@@ -380,17 +395,37 @@ async function startServer() {
   });
 
   app.post("/api/customers", (req, res) => {
-    const { name, email, phone, store_credit } = req.body;
-    const info = db.prepare("INSERT INTO customers (name, email, phone, store_credit) VALUES (?, ?, ?, ?)")
-      .run(name, email, phone, store_credit || 0);
+    const { name, email, phone, store_credit, allergies, notes } = req.body;
+    const info = db.prepare("INSERT INTO customers (name, email, phone, store_credit, allergies, notes) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(name, email, phone, store_credit || 0, allergies || '', notes || '');
     res.json({ id: info.lastInsertRowid });
   });
 
   app.put("/api/customers/:id", (req, res) => {
-    const { name, email, phone, store_credit } = req.body;
-    db.prepare("UPDATE customers SET name = ?, email = ?, phone = ?, store_credit = ? WHERE id = ?")
-      .run(name, email, phone, store_credit, req.params.id);
+    const { name, email, phone, store_credit, allergies, notes } = req.body;
+    db.prepare("UPDATE customers SET name = ?, email = ?, phone = ?, store_credit = ?, allergies = ?, notes = ? WHERE id = ?")
+      .run(name, email, phone, store_credit, allergies, notes, req.params.id);
     res.json({ success: true });
+  });
+
+  app.get("/api/customers/:id/treatments", (req, res) => {
+    const treatments = db.prepare(`
+      SELECT th.*, b.name as branch_name 
+      FROM treatment_history th
+      LEFT JOIN branches b ON th.branch_id = b.id
+      WHERE th.customer_id = ?
+      ORDER BY th.timestamp DESC
+    `).all(req.params.id);
+    res.json(treatments);
+  });
+
+  app.post("/api/customers/:id/treatments", (req, res) => {
+    const { treatment_name, dosage, notes, administered_by, branch_id } = req.body;
+    const info = db.prepare(`
+      INSERT INTO treatment_history (customer_id, treatment_name, dosage, notes, administered_by, branch_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(req.params.id, treatment_name, dosage, notes, administered_by, branch_id);
+    res.json({ id: info.lastInsertRowid });
   });
 
   app.delete("/api/customers/:id", (req, res) => {

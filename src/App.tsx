@@ -48,7 +48,7 @@ import {
   Cell
 } from 'recharts';
 import { cn } from './lib/utils';
-import { Product, CartItem, Sale, DailySummary, User as UserType, Customer, Bundle, ProductVariant, Branch } from './types';
+import { Product, CartItem, Sale, DailySummary, User as UserType, Customer, Bundle, ProductVariant, Branch, Treatment } from './types';
 
 type View = 'pos' | 'inventory' | 'reports' | 'history' | 'customers' | 'bundles' | 'branches' | 'users';
 type PaymentMethod = 'Cash' | 'GCash' | 'Card' | 'QRPH' | 'Store Credit';
@@ -96,7 +96,12 @@ export default function App() {
   const [sendReceipt, setSendReceipt] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [customerForm, setCustomerForm] = useState({ name: '', email: '', phone: '', store_credit: 0 });
+  const [customerForm, setCustomerForm] = useState({ name: '', email: '', phone: '', store_credit: 0, allergies: '', notes: '' });
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedCustomerForHistory, setSelectedCustomerForHistory] = useState<Customer | null>(null);
+  const [treatments, setTreatments] = useState<Treatment[]>([]);
+  const [treatmentForm, setTreatmentForm] = useState({ treatment_name: '', dosage: '', notes: '', administered_by: '' });
+  const [showAddTreatment, setShowAddTreatment] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState({
@@ -269,13 +274,56 @@ export default function App() {
         name: customer.name, 
         email: customer.email || '', 
         phone: customer.phone || '', 
-        store_credit: customer.store_credit 
+        store_credit: customer.store_credit,
+        allergies: customer.allergies || '',
+        notes: customer.notes || ''
       });
     } else {
       setEditingCustomer(null);
-      setCustomerForm({ name: '', email: '', phone: '', store_credit: 0 });
+      setCustomerForm({ name: '', email: '', phone: '', store_credit: 0, allergies: '', notes: '' });
     }
     setShowCustomerModal(true);
+  };
+
+  const openHistoryModal = async (customer: Customer) => {
+    setSelectedCustomerForHistory(customer);
+    setShowHistoryModal(true);
+    fetchTreatments(customer.id);
+  };
+
+  const fetchTreatments = async (customerId: number) => {
+    try {
+      const res = await fetch(`/api/customers/${customerId}/treatments`);
+      const data = await res.json();
+      setTreatments(data);
+    } catch (err) {
+      console.error('Failed to fetch treatments', err);
+    }
+  };
+
+  const handleTreatmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomerForHistory) return;
+
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomerForHistory.id}/treatments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...treatmentForm,
+          branch_id: selectedBranchId,
+          administered_by: treatmentForm.administered_by || user?.username
+        })
+      });
+
+      if (res.ok) {
+        setTreatmentForm({ treatment_name: '', dosage: '', notes: '', administered_by: '' });
+        setShowAddTreatment(false);
+        fetchTreatments(selectedCustomerForHistory.id);
+      }
+    } catch (err) {
+      console.error('Failed to add treatment', err);
+    }
   };
 
   const openProductModal = (product?: Product) => {
@@ -1499,6 +1547,12 @@ export default function App() {
                                   Edit
                                 </button>
                                 <button 
+                                  onClick={() => openHistoryModal(customer)}
+                                  className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-colors", theme === 'clinic' ? "text-pink-600 hover:bg-pink-50" : "text-emerald-600 hover:bg-emerald-50")}
+                                >
+                                  History
+                                </button>
+                                <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleDeleteCustomer(customer.id);
@@ -2284,6 +2338,32 @@ export default function App() {
                       )}
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Allergies</label>
+                    <textarea 
+                      value={customerForm.allergies}
+                      onChange={(e) => setCustomerForm({...customerForm, allergies: e.target.value})}
+                      className={cn(
+                        "w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all min-h-[80px]",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500" : "bg-slate-50 border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500",
+                        theme === 'clinic' && "focus:ring-pink-500/20 focus:border-pink-500"
+                      )}
+                      placeholder="List any known allergies..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Notes</label>
+                    <textarea 
+                      value={customerForm.notes}
+                      onChange={(e) => setCustomerForm({...customerForm, notes: e.target.value})}
+                      className={cn(
+                        "w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all min-h-[80px]",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500" : "bg-slate-50 border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500",
+                        theme === 'clinic' && "focus:ring-pink-500/20 focus:border-pink-500"
+                      )}
+                      placeholder="Additional patient notes..."
+                    />
+                  </div>
                   <div className="pt-4 flex gap-3">
                     <button
                       type="button"
@@ -2303,6 +2383,174 @@ export default function App() {
                     </button>
                   </div>
                 </form>
+              </motion.div>
+            </div>
+          )}
+          {showHistoryModal && selectedCustomerForHistory && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden transition-colors flex flex-col max-h-[90vh]",
+                  theme === 'dark' ? "bg-slate-900 border border-slate-800" : "bg-white"
+                )}
+              >
+                <div className={cn("p-6 border-b flex justify-between items-center", theme === 'dark' ? "border-slate-800" : "border-slate-100")}>
+                  <div>
+                    <h3 className={cn("text-xl font-bold", theme === 'dark' ? "text-slate-100" : "text-slate-900")}>
+                      Treatment History
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">{selectedCustomerForHistory.name}</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setShowHistoryModal(false);
+                      setShowAddTreatment(false);
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <Plus size={24} className="rotate-45" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <h4 className={cn("text-sm font-bold uppercase tracking-wider text-slate-400")}>Past Treatments</h4>
+                    <button 
+                      onClick={() => setShowAddTreatment(!showAddTreatment)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                        theme === 'clinic' ? "bg-pink-50 text-pink-600 hover:bg-pink-100" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                      )}
+                    >
+                      {showAddTreatment ? 'Cancel' : (
+                        <>
+                          <Plus size={14} />
+                          Record New Treatment
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <AnimatePresence>
+                    {showAddTreatment && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-8 overflow-hidden"
+                      >
+                        <form onSubmit={handleTreatmentSubmit} className={cn(
+                          "p-4 rounded-2xl border space-y-4",
+                          theme === 'dark' ? "bg-slate-800/50 border-slate-700" : "bg-slate-50 border-slate-200"
+                        )}>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Treatment/Drip Name</label>
+                              <input 
+                                type="text"
+                                required
+                                value={treatmentForm.treatment_name}
+                                onChange={(e) => setTreatmentForm({...treatmentForm, treatment_name: e.target.value})}
+                                className={cn(
+                                  "w-full px-3 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 transition-all",
+                                  theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-pink-500/20" : "bg-white border-slate-200 focus:ring-emerald-500/20"
+                                )}
+                                placeholder="e.g. Gluta Drip"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dosage</label>
+                              <input 
+                                type="text"
+                                value={treatmentForm.dosage}
+                                onChange={(e) => setTreatmentForm({...treatmentForm, dosage: e.target.value})}
+                                className={cn(
+                                  "w-full px-3 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 transition-all",
+                                  theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-pink-500/20" : "bg-white border-slate-200 focus:ring-emerald-500/20"
+                                )}
+                                placeholder="e.g. 1200mg"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Administered By</label>
+                            <input 
+                              type="text"
+                              value={treatmentForm.administered_by}
+                              onChange={(e) => setTreatmentForm({...treatmentForm, administered_by: e.target.value})}
+                              className={cn(
+                                "w-full px-3 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 transition-all",
+                                theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-pink-500/20" : "bg-white border-slate-200 focus:ring-emerald-500/20"
+                              )}
+                              placeholder={user?.username || "Nurse Name"}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Treatment Notes</label>
+                            <textarea 
+                              value={treatmentForm.notes}
+                              onChange={(e) => setTreatmentForm({...treatmentForm, notes: e.target.value})}
+                              className={cn(
+                                "w-full px-3 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 transition-all min-h-[60px]",
+                                theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-pink-500/20" : "bg-white border-slate-200 focus:ring-emerald-500/20"
+                              )}
+                              placeholder="Any specific observations..."
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            className={cn(
+                              "w-full py-2.5 text-white rounded-xl font-bold text-xs shadow-lg transition-all",
+                              theme === 'clinic' ? "bg-pink-600 hover:bg-pink-700" : "bg-emerald-600 hover:bg-emerald-700"
+                            )}
+                          >
+                            Save Treatment Record
+                          </button>
+                        </form>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="space-y-4">
+                    {treatments.length === 0 ? (
+                      <div className="text-center py-12 text-slate-400">
+                        <History size={48} className="mx-auto mb-4 opacity-20" />
+                        <p className="text-sm font-medium">No treatment records found.</p>
+                      </div>
+                    ) : (
+                      treatments.map((t) => (
+                        <div key={t.id} className={cn(
+                          "p-4 rounded-2xl border transition-all",
+                          theme === 'dark' ? "bg-slate-800/30 border-slate-800" : "bg-white border-slate-100 shadow-sm"
+                        )}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h5 className={cn("font-bold text-sm", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>{t.treatment_name}</h5>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                {format(new Date(t.timestamp), 'MMMM d, yyyy • h:mm a')}
+                              </p>
+                            </div>
+                            {t.dosage && (
+                              <span className={cn(
+                                "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
+                                theme === 'clinic' ? "bg-pink-50 text-pink-600" : "bg-emerald-50 text-emerald-600"
+                              )}>
+                                {t.dosage}
+                              </span>
+                            )}
+                          </div>
+                          {t.notes && <p className="text-xs text-slate-500 mb-2 italic">"{t.notes}"</p>}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-2">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Administered by: {t.administered_by}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter flex items-center gap-1"><Building2 size={10}/> {t.branch_name}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </motion.div>
             </div>
           )}
