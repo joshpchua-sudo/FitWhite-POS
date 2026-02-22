@@ -671,6 +671,36 @@ async function startServer() {
     res.json(lowStock);
   });
 
+  // User Management Routes
+  app.get("/api/users", (req, res) => {
+    const users = db.prepare(`
+      SELECT u.id, u.username, u.role, u.branch_id, b.name as branch_name 
+      FROM users u 
+      LEFT JOIN branches b ON u.branch_id = b.id
+      ORDER BY u.role, u.username
+    `).all();
+    res.json(users);
+  });
+
+  app.put("/api/users/:id", (req, res) => {
+    const { id } = req.params;
+    const { username, password } = req.body;
+    
+    try {
+      if (password) {
+        db.prepare("UPDATE users SET username = ?, password = ? WHERE id = ?")
+          .run(username, password, id);
+      } else {
+        db.prepare("UPDATE users SET username = ? WHERE id = ?")
+          .run(username, id);
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Update user error:', error);
+      res.status(500).json({ error: "Failed to update user credentials. Username might already be taken." });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
