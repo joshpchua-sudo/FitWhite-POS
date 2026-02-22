@@ -451,10 +451,11 @@ export default function App() {
   };
 
   const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const safeDiscount = isNaN(discount) ? 0 : discount;
   const calculatedDiscount = discountType === 'percent' 
-    ? (cartSubtotal * (discount / 100)) 
-    : discount;
-  const cartTotal = Math.max(0, cartSubtotal - calculatedDiscount);
+    ? (cartSubtotal * (safeDiscount / 100)) 
+    : safeDiscount;
+  const cartTotal = Math.max(0, cartSubtotal - (calculatedDiscount || 0));
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -996,7 +997,10 @@ export default function App() {
                           theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-slate-200"
                         )}
                         value={discount || ''}
-                        onChange={(e) => setDiscount(Number(e.target.value))}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setDiscount(isNaN(val) ? 0 : val);
+                        }}
                       />
                     </div>
                     <button 
@@ -1865,7 +1869,10 @@ export default function App() {
                           theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200"
                         )}
                         value={bundleForm.price}
-                        onChange={(e) => setBundleForm({ ...bundleForm, price: parseFloat(e.target.value) })}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          setBundleForm({ ...bundleForm, price: isNaN(val) ? 0 : val });
+                        }}
                       />
                     </div>
                   </div>
@@ -2043,7 +2050,10 @@ export default function App() {
                           theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200"
                         )}
                         value={productForm.price}
-                        onChange={(e) => setProductForm({ ...productForm, price: parseFloat(e.target.value) })}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          setProductForm({ ...productForm, price: isNaN(val) ? 0 : val });
+                        }}
                       />
                     </div>
                     <div>
@@ -2058,7 +2068,10 @@ export default function App() {
                           theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200"
                         )}
                         value={productForm.stockToAdd}
-                        onChange={(e) => setProductForm({ ...productForm, stockToAdd: parseInt(e.target.value) })}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                          setProductForm({ ...productForm, stockToAdd: isNaN(val) ? 0 : val });
+                        }}
                       />
                     </div>
                   </div>
@@ -2158,7 +2171,10 @@ export default function App() {
                       min="0"
                       step="0.01"
                       value={customerForm.store_credit}
-                      onChange={(e) => setCustomerForm({...customerForm, store_credit: Number(e.target.value)})}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : Number(e.target.value);
+                        setCustomerForm({...customerForm, store_credit: isNaN(val) ? 0 : val});
+                      }}
                       className={cn(
                         "w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all",
                         theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500" : "bg-slate-50 border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500",
