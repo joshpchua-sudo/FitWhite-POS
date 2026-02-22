@@ -31,7 +31,9 @@ import {
   LogOut,
   Moon,
   Sun,
-  Palette
+  Palette,
+  Menu,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -66,6 +68,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [inventorySearch, setInventorySearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showCart, setShowCart] = useState(false);
   const [inventoryTab, setInventoryTab] = useState<'services' | 'products' | 'low-stock'>('products');
   const [dailySales, setDailySales] = useState<Sale[]>([]);
   const [summary, setSummary] = useState<DailySummary>({ total_revenue: 0, total_transactions: 0 });
@@ -600,20 +604,45 @@ export default function App() {
 
   return (
     <div className={cn("flex h-screen font-sans overflow-hidden transition-colors duration-300", themeClasses[theme])}>
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className={cn("w-64 border-r flex flex-col transition-colors duration-300", sidebarClasses[theme])}>
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-50 w-64 border-r flex flex-col transition-all duration-300 lg:relative lg:translate-x-0 transform",
+        sidebarClasses[theme],
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
         <div className="p-6 flex-1 overflow-y-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transition-colors",
-              theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "bg-pink-600 shadow-pink-200" : "bg-emerald-600 shadow-emerald-200"
-            )}>
-              <CheckCircle2 size={24} />
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transition-colors",
+                theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "bg-pink-600 shadow-pink-200" : "bg-emerald-600 shadow-emerald-200"
+              )}>
+                <CheckCircle2 size={24} />
+              </div>
+              <div>
+                <h1 className="font-bold text-lg tracking-tight">FitWhite</h1>
+                <p className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-500")}>POS System</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-lg tracking-tight">FitWhite</h1>
-              <p className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-500")}>POS System</p>
-            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={20} />
+            </button>
           </div>
 
           <div className="mb-6">
@@ -663,19 +692,19 @@ export default function App() {
           )}
 
           <nav className="space-y-1">
-            <NavItem active={currentView === 'pos'} onClick={() => setCurrentView('pos')} icon={<ShoppingCart size={20} />} label="Terminal" theme={theme} />
-            <NavItem active={currentView === 'customers'} onClick={() => setCurrentView('customers')} icon={<Users size={20} />} label="Customers" theme={theme} />
+            <NavItem active={currentView === 'pos'} onClick={() => { setCurrentView('pos'); setIsSidebarOpen(false); }} icon={<ShoppingCart size={20} />} label="Terminal" theme={theme} />
+            <NavItem active={currentView === 'customers'} onClick={() => { setCurrentView('customers'); setIsSidebarOpen(false); }} icon={<Users size={20} />} label="Customers" theme={theme} />
             {(user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_MANAGER') && (
               <>
-                <NavItem active={currentView === 'bundles'} onClick={() => setCurrentView('bundles')} icon={<Tag size={20} />} label="Bundles" theme={theme} />
-                <NavItem active={currentView === 'inventory'} onClick={() => setCurrentView('inventory')} icon={<Package size={20} />} label="Inventory" theme={theme} />
-                <NavItem active={currentView === 'reports'} onClick={() => setCurrentView('reports')} icon={<BarChart3 size={20} />} label="Reports" theme={theme} />
+                <NavItem active={currentView === 'bundles'} onClick={() => { setCurrentView('bundles'); setIsSidebarOpen(false); }} icon={<Tag size={20} />} label="Bundles" theme={theme} />
+                <NavItem active={currentView === 'inventory'} onClick={() => { setCurrentView('inventory'); setIsSidebarOpen(false); }} icon={<Package size={20} />} label="Inventory" theme={theme} />
+                <NavItem active={currentView === 'reports'} onClick={() => { setCurrentView('reports'); setIsSidebarOpen(false); }} icon={<BarChart3 size={20} />} label="Reports" theme={theme} />
               </>
             )}
             {user.role === 'SUPER_ADMIN' && (
-              <NavItem active={currentView === 'branches'} onClick={() => setCurrentView('branches')} icon={<Building2 size={20} />} label="Branch Monitor" theme={theme} />
+              <NavItem active={currentView === 'branches'} onClick={() => { setCurrentView('branches'); setIsSidebarOpen(false); }} icon={<Building2 size={20} />} label="Branch Monitor" theme={theme} />
             )}
-            <NavItem active={currentView === 'history'} onClick={() => setCurrentView('history')} icon={<History size={20} />} label="History" theme={theme} />
+            <NavItem active={currentView === 'history'} onClick={() => { setCurrentView('history'); setIsSidebarOpen(false); }} icon={<History size={20} />} label="History" theme={theme} />
           </nav>
         </div>
 
@@ -709,38 +738,44 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Top Header */}
         <header className={cn(
-          "h-16 border-b flex items-center justify-between px-8 transition-colors duration-300",
+          "h-16 border-b flex items-center justify-between px-4 lg:px-8 transition-colors duration-300",
           theme === 'dark' || theme === 'neopos' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200",
           theme === 'neopos' && "bg-gray-900 border-gray-800"
         )}>
-          <div className="flex items-center gap-4">
-            <h2 className={cn("text-lg font-bold", theme === 'dark' || theme === 'neopos' ? "text-slate-200" : "text-slate-800")}>
+          <div className="flex items-center gap-2 lg:gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+            >
+              <Menu size={20} />
+            </button>
+            <h2 className={cn("text-sm lg:text-lg font-bold", theme === 'dark' || theme === 'neopos' ? "text-slate-200" : "text-slate-800")}>
               {currentView.charAt(0).toUpperCase() + currentView.slice(1)}
             </h2>
-            <div className={cn("h-4 w-[1px]", theme === 'dark' || theme === 'neopos' ? "bg-slate-800" : "bg-slate-200")} />
-            <p className="text-xs text-slate-500 font-medium">
+            <div className={cn("hidden lg:block h-4 w-[1px]", theme === 'dark' || theme === 'neopos' ? "bg-slate-800" : "bg-slate-200")} />
+            <p className="hidden lg:block text-xs text-slate-500 font-medium">
               {currentBranch.name} ({currentBranch.type})
             </p>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className={cn("text-sm font-bold tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-700")}>
+          <div className="flex items-center gap-3 lg:gap-6">
+            <div className="text-right hidden sm:block">
+              <p className={cn("text-xs lg:text-sm font-bold tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-700")}>
                 {format(currentTime, 'HH:mm:ss')}
               </p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+              <p className="text-[8px] lg:text-[10px] text-slate-500 font-bold uppercase tracking-widest">
                 {format(currentTime, 'EEE, MMM do, yyyy')}
               </p>
             </div>
             <button 
               onClick={() => setUser(null)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-lg active:scale-95",
+                "flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-[10px] lg:text-xs font-bold text-white transition-all shadow-lg active:scale-95",
                 theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "bg-pink-600 hover:bg-pink-700 shadow-pink-200" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
               )}
             >
               <LogOut size={14} />
-              Logout
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </header>
@@ -752,14 +787,14 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="flex-1 flex overflow-hidden"
+              className="flex-1 flex flex-col lg:flex-row overflow-hidden relative"
             >
               {/* Product Grid */}
-              <div className="flex-1 p-8 overflow-y-auto">
-                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-2xl font-bold tracking-tight">New Transaction</h2>
+              <div className="flex-1 p-4 lg:p-8 overflow-y-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                  <h2 className="text-xl lg:text-2xl font-bold tracking-tight">New Transaction</h2>
                   <div className="flex gap-4">
-                    <div className="relative w-72">
+                    <div className="relative w-full sm:w-72">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input 
                         type="text"
@@ -782,7 +817,7 @@ export default function App() {
                       <Gift size={16} />
                       Special Bundles
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                       {bundles.map(bundle => (
                         <motion.button
                           whileHover={{ scale: 1.02 }}
@@ -813,7 +848,7 @@ export default function App() {
                 )}
 
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Products & Services</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                       {filteredProducts.map(product => (
                         <div key={product.id} className="group">
                           <motion.div
@@ -894,16 +929,41 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Cart Sidebar */}
+              {/* Mobile Cart Toggle Button */}
+              <div className="lg:hidden fixed bottom-6 right-6 z-30">
+                <button 
+                  onClick={() => setShowCart(true)}
+                  className={cn(
+                    "w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl relative",
+                    theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "bg-pink-600" : "bg-emerald-600"
+                  )}
+                >
+                  <ShoppingCart size={24} />
+                  {cart.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                      {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Cart Sidebar / Drawer */}
               <div className={cn(
-                "w-96 border-l flex flex-col shadow-xl transition-colors duration-300",
-                theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                "fixed inset-y-0 right-0 z-50 w-full sm:w-96 border-l flex flex-col shadow-2xl transition-all duration-300 lg:relative lg:translate-x-0 transform bg-white",
+                theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200",
+                showCart ? "translate-x-0" : "translate-x-full"
               )}>
-                <div className={cn("p-6 border-b", theme === 'dark' ? "border-slate-800" : "border-slate-100")}>
+                <div className={cn("p-6 border-b flex items-center justify-between", theme === 'dark' ? "border-slate-800" : "border-slate-100")}>
                   <h3 className="text-lg font-bold flex items-center gap-2">
                     <ShoppingCart size={20} className={theme === 'clinic' ? "text-pink-600" : "text-emerald-600"} />
                     Current Order
                   </h3>
+                  <button 
+                    onClick={() => setShowCart(false)}
+                    className="lg:hidden p-2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={20} />
+                  </button>
                 </div>
 
                 {/* Customer Selection */}
@@ -1142,15 +1202,15 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="flex-1 p-8 overflow-y-auto"
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
             >
               <div className="max-w-5xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Inventory Management</h2>
-                    <p className="text-slate-500 text-sm">Track and manage your clinic's products and services.</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Inventory Management</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">Track and manage your clinic's products and services.</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     {user?.role === 'SUPER_ADMIN' && (
                       <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mr-2">
                         <Building2 size={16} className="ml-2 text-slate-400" />
@@ -1345,18 +1405,18 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="flex-1 p-8 overflow-y-auto"
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
             >
               <div className="max-w-5xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Customer Profiles</h2>
-                    <p className="text-slate-500 text-sm">Manage customer information and store credit.</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Customer Profiles</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">Manage customer information and store credit.</p>
                   </div>
                   <button 
                     onClick={() => openCustomerModal()}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold transition-colors shadow-lg",
+                      "w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold transition-colors shadow-lg",
                       theme === 'clinic' ? "bg-pink-600 hover:bg-pink-700 shadow-pink-100" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100"
                     )}
                   >
@@ -1452,18 +1512,18 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="flex-1 p-8 overflow-y-auto"
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
             >
               <div className="max-w-5xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Product Bundles</h2>
-                    <p className="text-slate-500 text-sm">Create and manage special package deals.</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Product Bundles</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">Create and manage special package deals.</p>
                   </div>
                   <button 
                     onClick={() => setShowBundleModal(true)}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold transition-colors shadow-lg",
+                      "w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold transition-colors shadow-lg",
                       theme === 'clinic' ? "bg-pink-600 hover:bg-pink-700 shadow-pink-100" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100"
                     )}
                   >
@@ -1472,7 +1532,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
                   {bundles.map(bundle => (
                     <div key={bundle.id} className={cn(
                       "border rounded-2xl shadow-sm p-6 transition-colors",
@@ -1523,17 +1583,17 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex-1 p-8 overflow-y-auto"
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
             >
               <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Branch Real-time Monitor</h2>
-                    <p className="text-slate-500 text-sm">Live status of all company-owned and managed branches.</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Branch Real-time Monitor</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">Live status of all company-owned and managed branches.</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                   {branches.filter(b => b.id !== 'Admin').map(branch => (
                     <BranchStatusCard 
                       key={branch.id} 
@@ -1556,13 +1616,13 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="flex-1 p-8 overflow-y-auto"
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
             >
               <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Order History</h2>
-                    <p className="text-slate-500 text-sm">Review and manage past transactions.</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Order History</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">Review and manage past transactions.</p>
                   </div>
                 </div>
 
@@ -1654,15 +1714,15 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.02 }}
-              className="flex-1 p-8 overflow-y-auto"
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
             >
               <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Daily Sales Report</h2>
-                    <p className="text-slate-500 text-sm">{format(new Date(), 'EEEE, MMMM do, yyyy')}</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Daily Sales Report</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">{format(new Date(), 'EEEE, MMMM do, yyyy')}</p>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <button className={cn(
                       "px-4 py-2 border rounded-xl text-sm font-bold transition-colors shadow-sm",
                       theme === 'dark' ? "bg-slate-800 border-slate-700 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
@@ -1679,7 +1739,7 @@ export default function App() {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-8">
                   <StatCard 
                     label="Total Revenue" 
                     value={`₱${(summary?.total_revenue ?? 0).toLocaleString()}`}
