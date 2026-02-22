@@ -479,6 +479,18 @@ export default function App() {
       }
     }
 
+    // Security: Cashier discount limit
+    if (user?.role === 'CASHIER') {
+      if (discountType === 'percent' && discount > 20) {
+        alert('Security Alert: Cashiers are limited to 20% discount. Manager approval required for higher discounts.');
+        return;
+      }
+      if (discountType === 'fixed' && discount > (cartSubtotal * 0.2)) {
+        alert('Security Alert: Discount exceeds 20% of total. Manager approval required.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const regularItems = cart.filter(i => !i.isBundle);
@@ -600,7 +612,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-bold text-lg tracking-tight">FitWhite</h1>
-              <p className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-500")}>NeoPOS System</p>
+              <p className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-500")}>POS System</p>
             </div>
           </div>
 
@@ -653,9 +665,13 @@ export default function App() {
           <nav className="space-y-1">
             <NavItem active={currentView === 'pos'} onClick={() => setCurrentView('pos')} icon={<ShoppingCart size={20} />} label="Terminal" theme={theme} />
             <NavItem active={currentView === 'customers'} onClick={() => setCurrentView('customers')} icon={<Users size={20} />} label="Customers" theme={theme} />
-            <NavItem active={currentView === 'bundles'} onClick={() => setCurrentView('bundles')} icon={<Tag size={20} />} label="Bundles" theme={theme} />
-            <NavItem active={currentView === 'inventory'} onClick={() => setCurrentView('inventory')} icon={<Package size={20} />} label="Inventory" theme={theme} />
-            <NavItem active={currentView === 'reports'} onClick={() => setCurrentView('reports')} icon={<BarChart3 size={20} />} label="Reports" theme={theme} />
+            {(user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_MANAGER') && (
+              <>
+                <NavItem active={currentView === 'bundles'} onClick={() => setCurrentView('bundles')} icon={<Tag size={20} />} label="Bundles" theme={theme} />
+                <NavItem active={currentView === 'inventory'} onClick={() => setCurrentView('inventory')} icon={<Package size={20} />} label="Inventory" theme={theme} />
+                <NavItem active={currentView === 'reports'} onClick={() => setCurrentView('reports')} icon={<BarChart3 size={20} />} label="Reports" theme={theme} />
+              </>
+            )}
             {user.role === 'SUPER_ADMIN' && (
               <NavItem active={currentView === 'branches'} onClick={() => setCurrentView('branches')} icon={<Building2 size={20} />} label="Branch Monitor" theme={theme} />
             )}
@@ -988,7 +1004,9 @@ export default function App() {
                   {/* Discount Section */}
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
-                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center justify-center w-4">
+                        {discountType === 'percent' ? <Percent size={14} /> : <span className="text-xs font-bold">₱</span>}
+                      </div>
                       <input 
                         type="number"
                         placeholder={discountType === 'percent' ? "Discount %" : "Discount ₱"}
@@ -1012,7 +1030,7 @@ export default function App() {
                           : (theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-400" : "bg-white border-slate-200 text-slate-400")
                       )}
                     >
-                      {discountType === 'percent' ? <Percent size={14} /> : <Banknote size={14} />}
+                      {discountType === 'percent' ? <Percent size={14} /> : <span className="text-sm font-bold">₱</span>}
                     </button>
                   </div>
 
@@ -1091,8 +1109,8 @@ export default function App() {
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-xs text-rose-500 font-bold">
-                        <span>Discount</span>
-                        <span>-₱{discount.toLocaleString()}</span>
+                        <span>Discount {discountType === 'percent' ? `(${discount}%)` : ''}</span>
+                        <span>-₱{calculatedDiscount.toLocaleString()}</span>
                       </div>
                     )}
                     <div className={cn("flex justify-between text-xl font-black pt-2 border-t", theme === 'dark' ? "text-slate-100 border-slate-800" : "text-slate-900 border-slate-200")}>
@@ -1600,7 +1618,7 @@ export default function App() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            {sale.status === 'Completed' && (
+                            {sale.status === 'Completed' && (user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_MANAGER') && (
                               <div className="flex flex-col gap-1">
                                 <button 
                                   onClick={() => handleRefund(sale.id, false)}
