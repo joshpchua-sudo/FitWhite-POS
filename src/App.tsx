@@ -1522,7 +1522,20 @@ export default function App() {
                         )
                         .map(customer => (
                           <tr key={customer.id} className={cn("transition-colors", theme === 'dark' ? "hover:bg-slate-800/50" : "hover:bg-slate-50/50")}>
-                            <td className={cn("px-6 py-4 font-bold", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>{customer.name}</td>
+                            <td className={cn("px-6 py-4 font-bold", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>
+                              <div className="flex items-center gap-2">
+                                {customer.name}
+                                {customer.allergies && (
+                                  <div className="group relative">
+                                    <AlertTriangle size={14} className="text-rose-500 animate-pulse" />
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-rose-600 text-white text-[10px] rounded-lg shadow-xl z-10">
+                                      <p className="font-bold uppercase mb-1">Allergy Warning:</p>
+                                      {customer.allergies}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-xs text-slate-500 flex items-center gap-1"><Mail size={12}/> {customer.email || 'N/A'}</span>
@@ -2415,6 +2428,31 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
+                  {/* Patient Profile Summary in History Modal */}
+                  <div className={cn(
+                    "mb-6 p-4 rounded-2xl border flex flex-col gap-3",
+                    theme === 'dark' ? "bg-slate-800/50 border-slate-700" : "bg-slate-50 border-slate-200"
+                  )}>
+                    <div className="flex items-center gap-2 text-rose-600">
+                      <AlertTriangle size={16} />
+                      <h4 className="text-xs font-black uppercase tracking-wider">Patient Medical Profile</h4>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Known Allergies</p>
+                        <p className={cn("text-xs font-medium", selectedCustomerForHistory.allergies ? "text-rose-600" : "text-slate-500 italic")}>
+                          {selectedCustomerForHistory.allergies || 'No known allergies recorded.'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Clinical Notes</p>
+                        <p className="text-xs text-slate-600 font-medium">
+                          {selectedCustomerForHistory.notes || 'No additional notes.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex justify-between items-center mb-6">
                     <h4 className={cn("text-sm font-bold uppercase tracking-wider text-slate-400")}>Past Treatments</h4>
                     <button 

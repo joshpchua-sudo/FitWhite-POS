@@ -253,33 +253,35 @@ if (productCount.count === 0) {
     "Tea Tree Soothing gel", "Mupirucin", "Etherium", "Fougera", "BINDER CORSET"
   ];
 
-  for (const s of services) {
-    const info = insert.run(s, "Service", 1000, "session");
-    for (const b of branches) {
-      insertStock.run(info.lastInsertRowid, b.id, 999);
-    }
-  }
-
-  for (const a of addons) {
-    const info = insert.run(a, "Add-on", 500, "pcs");
-    for (const b of branches) {
-      insertStock.run(info.lastInsertRowid, b.id, 50);
-    }
-    
-    // Add some variants for certain products
-    if (a.includes("SOAP")) {
-      const insertVariant = db.prepare("INSERT INTO product_variants (product_id, name, price_adjustment) VALUES (?, ?, ?)");
-      const insertVariantStock = db.prepare("INSERT INTO variant_stocks (variant_id, branch_id, stock) VALUES (?, ?, ?)");
-      
-      const v1 = insertVariant.run(info.lastInsertRowid, "Small (50g)", -50);
-      const v2 = insertVariant.run(info.lastInsertRowid, "Large (150g)", 50);
-      
+  db.transaction(() => {
+    for (const s of services) {
+      const info = insert.run(s, "Service", 1000, "session");
       for (const b of branches) {
-        insertVariantStock.run(v1.lastInsertRowid, b.id, 20);
-        insertVariantStock.run(v2.lastInsertRowid, b.id, 30);
+        insertStock.run(info.lastInsertRowid, b.id, 999);
       }
     }
-  }
+
+    for (const a of addons) {
+      const info = insert.run(a, "Add-on", 500, "pcs");
+      for (const b of branches) {
+        insertStock.run(info.lastInsertRowid, b.id, 50);
+      }
+      
+      // Add some variants for certain products
+      if (a.includes("SOAP")) {
+        const insertVariant = db.prepare("INSERT INTO product_variants (product_id, name, price_adjustment) VALUES (?, ?, ?)");
+        const insertVariantStock = db.prepare("INSERT INTO variant_stocks (variant_id, branch_id, stock) VALUES (?, ?, ?)");
+        
+        const v1 = insertVariant.run(info.lastInsertRowid, "Small (50g)", -50);
+        const v2 = insertVariant.run(info.lastInsertRowid, "Large (150g)", 50);
+        
+        for (const b of branches) {
+          insertVariantStock.run(v1.lastInsertRowid, b.id, 20);
+          insertVariantStock.run(v2.lastInsertRowid, b.id, 30);
+        }
+      }
+    }
+  })();
 
   // Seed some bundles
   const insertBundle = db.prepare("INSERT INTO bundles (name, price) VALUES (?, ?)");
