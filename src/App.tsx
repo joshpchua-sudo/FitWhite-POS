@@ -1624,8 +1624,8 @@ export default function App() {
                       <div className="space-y-2 mb-6">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Included Items:</p>
                         <ul className="space-y-1">
-                          {bundle.items.map((item, idx) => (
-                            <li key={idx} className="text-xs text-slate-500 flex justify-between">
+                          {bundle.items.map((item) => (
+                            <li key={item.name} className="text-xs text-slate-500 flex justify-between">
                               <span>{item.quantity}x {item.name}</span>
                               <span className="text-slate-400">₱{item.price.toLocaleString()}</span>
                             </li>
@@ -1888,8 +1888,8 @@ export default function App() {
                             labelFormatter={(val) => format(new Date(val), 'HH:mm')}
                           />
                           <Bar dataKey="total_amount" radius={[4, 4, 0, 0]}>
-                            {dailySales.map((_, index) => (
-                              <Cell key={`cell-${index}`} fill={theme === 'clinic' ? '#DB2777' : (index % 2 === 0 ? '#10B981' : '#3B82F6')} />
+                            {dailySales.map((sale) => (
+                              <Cell key={`cell-${sale.id}`} fill={theme === 'clinic' ? '#DB2777' : (sale.id % 2 === 0 ? '#10B981' : '#3B82F6')} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -2081,8 +2081,8 @@ export default function App() {
                     </div>
 
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                      {bundleForm.items.map((item, idx) => (
-                        <div key={idx} className={cn("flex items-center justify-between p-3 rounded-xl border", theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-100")}>
+                      {bundleForm.items.map((item) => (
+                        <div key={item.productId} className={cn("flex items-center justify-between p-3 rounded-xl border", theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-100")}>
                           <span className="text-xs font-bold">{item.name}</span>
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2">

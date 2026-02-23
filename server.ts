@@ -8,6 +8,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const db = new Database("pos.db");
+console.log("Initializing database...");
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // Initialize Database
 db.exec(`
@@ -145,6 +148,7 @@ db.exec(`
 // Seed initial data if empty
 const branchCount = db.prepare("SELECT COUNT(*) as count FROM branches").get() as { count: number };
 if (branchCount.count === 0) {
+  console.log("Seeding branches...");
   const insertBranch = db.prepare("INSERT INTO branches (id, name, type) VALUES (?, ?, ?)");
   
   // COMPANY-OWNED
@@ -174,15 +178,16 @@ if (userCount.count === 0) {
   
   // Branch Managers
   insertUser.run("manager_imus", "manager123", "BRANCH_MANAGER", "Imus-00");
-  insertUser.run("manager_bacoor", "manager123", "BRANCH_MANAGER", "Bacoor-01");
+  insertUser.run("manager_bacoor", "manager123", "BRANCH_MANAGER", "Bacolod-01");
   
   // Cashiers
   insertUser.run("cashier_imus", "cashier123", "CASHIER", "Imus-00");
-  insertUser.run("cashier_bacoor", "cashier123", "CASHIER", "Bacoor-01");
+  insertUser.run("cashier_bacoor", "cashier123", "CASHIER", "Bacolod-01");
 }
 
 const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get() as { count: number };
 if (productCount.count === 0) {
+  console.log("Seeding products and services...");
   const insert = db.prepare("INSERT INTO products (name, category, price, unit) VALUES (?, ?, ?, ?)");
   const insertStock = db.prepare("INSERT INTO product_stocks (product_id, branch_id, stock) VALUES (?, ?, ?)");
   const branches = db.prepare("SELECT id FROM branches").all() as { id: string }[];
