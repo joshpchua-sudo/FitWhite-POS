@@ -10,6 +10,7 @@ import {
   Globe,
   User,
   History,
+  Settings,
   Moon,
   Palette,
   X
@@ -159,6 +160,9 @@ export function Sidebar({
               </>
             )}
             <NavItem active={currentView === 'history'} onClick={() => { setCurrentView('history'); setIsSidebarOpen(false); }} icon={<History size={20} />} label="History" theme={theme} />
+            {user.role === 'SUPER_ADMIN' && (
+              <NavItem active={currentView === 'settings'} onClick={() => { setCurrentView('settings'); setIsSidebarOpen(false); }} icon={<Settings size={20} />} label="Settings" theme={theme} />
+            )}
           </nav>
         </div>
 

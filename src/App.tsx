@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleGenAI } from "@google/genai";
+import Markdown from 'react-markdown';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -26,6 +28,7 @@ import {
   Smartphone,
   Percent,
   Wallet,
+  Settings,
   Building2,
   Globe,
   LogOut,
@@ -96,6 +99,15 @@ export default function App() {
   const [branchPerformance, setBranchPerformance] = useState<BranchPerformance[]>([]);
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
   const [isExporting, setIsExporting] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [offlineSales, setOfflineSales] = useState<any[]>(() => {
+    const saved = localStorage.getItem('offlineSales');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
@@ -143,8 +155,89 @@ export default function App() {
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('offlineSales', JSON.stringify(offlineSales));
+  }, [offlineSales]);
+
+  useEffect(() => {
+    if (isOnline && offlineSales.length > 0) {
+      syncOfflineSales();
+    }
+  }, [isOnline]);
+
+  const syncOfflineSales = async () => {
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sales: offlineSales })
+      });
+      if (res.ok) {
+        setOfflineSales([]);
+        fetchDailyReports();
+        alert('Offline sales synced successfully!');
+      }
+    } catch (err) {
+      console.error('Sync failed', err);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`/api/notifications?branchId=${selectedBranchId}`);
+      const data = await res.json();
+      setNotifications(data);
+    } catch (err) {
+      console.error('Failed to fetch notifications', err);
+    }
+  };
+
+  const markNotificationsRead = async () => {
+    try {
+      await fetch('/api/notifications/read', { method: 'POST' });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+    } catch (err) {
+      console.error('Failed to mark notifications as read', err);
+    }
+  };
+
+  const generateAiSuggestions = async () => {
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch(`/api/reports/export?period=monthly&branchId=${selectedBranchId}`);
+      const salesData = await res.json();
+      
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze these sales data and suggest restock quantities and schedules for the next month. Focus on high-demand items and predict potential stockouts. Data: ${JSON.stringify(salesData.slice(0, 50))}`,
+        config: {
+          systemInstruction: "You are an expert inventory analyst for a retail business. Provide concise, actionable restock suggestions in Markdown format."
+        }
+      });
+      
+      setAiSuggestions(response.text || 'No suggestions available.');
+    } catch (err) {
+      console.error('AI analysis failed', err);
+      setAiSuggestions('Failed to generate suggestions. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -154,6 +247,7 @@ export default function App() {
       fetchCustomers();
       fetchDailyReports();
       fetchBranchPerformance();
+      fetchNotifications();
     }
   }, [currentView, user, selectedBranchId, reportPeriod]);
 
@@ -334,7 +428,7 @@ export default function App() {
       if (res.ok) {
         setShowCustomerModal(false);
         setEditingCustomer(null);
-        setCustomerForm({ name: '', email: '', phone: '', store_credit: 0 });
+        setCustomerForm({ name: '', email: '', phone: '', store_credit: 0, allergies: '', notes: '' });
         fetchCustomers();
       }
     } catch (err) {
@@ -669,23 +763,35 @@ export default function App() {
     }
 
     setLoading(true);
-    try {
-      const regularItems = cart.filter(i => !i.isBundle);
-      const bundleItems = cart.filter(i => i.isBundle);
+    const saleData = { 
+      items: cart.filter(i => !i.isBundle), 
+      bundles: cart.filter(i => i.isBundle),
+      total: cartTotal, 
+      discount: calculatedDiscount,
+      paymentMethod,
+      customerId: selectedCustomer?.id,
+      receiptTo: sendReceipt ? receiptTo : null,
+      branchId: selectedBranchId,
+      timestamp: new Date().toISOString()
+    };
 
+    if (!isOnline) {
+      setOfflineSales(prev => [...prev, saleData]);
+      setCart([]);
+      setSelectedCustomer(null);
+      setDiscount(0);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+      setLoading(false);
+      alert('Network failure. Sale saved locally and will sync when online.');
+      return;
+    }
+
+    try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          items: regularItems, 
-          bundles: bundleItems,
-          total: cartTotal, 
-          discount: calculatedDiscount,
-          paymentMethod,
-          customerId: selectedCustomer?.id,
-          receiptTo: sendReceipt ? receiptTo : null,
-          branchId: selectedBranchId
-        })
+        body: JSON.stringify(saleData)
       });
       if (res.ok) {
         setCart([]);
@@ -818,6 +924,81 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3 lg:gap-6">
+            <div className="flex items-center gap-2">
+              {!isOnline && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 px-2 py-1 bg-rose-500 text-white text-[10px] font-bold rounded-lg animate-pulse">
+                    <Globe size={12} />
+                    OFFLINE
+                  </div>
+                  {offlineSales.length > 0 && (
+                    <div className="px-2 py-1 bg-amber-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1">
+                      <RotateCcw size={10} className="animate-spin-slow" />
+                      {offlineSales.length} PENDING
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    setShowNotifications(!showNotifications);
+                    if (!showNotifications) markNotificationsRead();
+                  }}
+                  className={cn(
+                    "p-2 rounded-xl transition-colors relative",
+                    theme === 'dark' || theme === 'neopos' ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
+                  )}
+                >
+                  <AlertTriangle size={20} />
+                  {notifications.some(n => !n.is_read) && (
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />
+                  )}
+                </button>
+                
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className={cn(
+                        "absolute right-0 mt-2 w-80 max-h-[400px] overflow-y-auto rounded-2xl shadow-2xl z-50 border",
+                        theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                      )}
+                    >
+                      <div className="p-4 border-b flex items-center justify-between">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Notifications</h3>
+                        <span className="text-[10px] font-bold text-slate-400">{notifications.length} total</span>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {notifications.length === 0 ? (
+                          <div className="p-8 text-center text-slate-400 text-xs">No notifications</div>
+                        ) : (
+                          notifications.map(n => (
+                            <div key={n.id} className={cn("p-4 transition-colors", !n.is_read && (theme === 'dark' ? "bg-slate-800/50" : "bg-slate-50"))}>
+                              <div className="flex gap-3">
+                                <div className={cn(
+                                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                                  n.type === 'LOW_STOCK' ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"
+                                )}>
+                                  {n.type === 'LOW_STOCK' ? <Package size={16} /> : <AlertTriangle size={16} />}
+                                </div>
+                                <div>
+                                  <p className={cn("text-xs font-medium", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>{n.message}</p>
+                                  <p className="text-[10px] text-slate-400 mt-1">{format(new Date(n.timestamp), 'MMM d, HH:mm')}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
             <div className="text-right hidden sm:block">
               <p className={cn("text-xs lg:text-sm font-bold tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-700")}>
                 {format(currentTime, 'HH:mm:ss')}
@@ -2019,6 +2200,166 @@ export default function App() {
                           </table>
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Restock Suggestions Section */}
+                <div className={cn(
+                  "mt-8 p-8 border rounded-3xl shadow-xl transition-all relative overflow-hidden",
+                  theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                )}>
+                  <div className="absolute top-0 right-0 p-8 opacity-5">
+                    <Globe size={120} />
+                  </div>
+                  
+                  <div className="relative z-10">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+                          theme === 'clinic' ? "bg-pink-600 text-white" : "bg-emerald-600 text-white"
+                        )}>
+                          <TrendingUp size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold tracking-tight">AI Restock Suggestions</h3>
+                          <p className="text-slate-500 text-sm">Smart inventory predictions based on your sales patterns.</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={generateAiSuggestions}
+                        disabled={isAnalyzing}
+                        className={cn(
+                          "px-6 py-3 rounded-2xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 active:scale-95 disabled:opacity-50",
+                          theme === 'clinic' ? "bg-pink-600 text-white hover:bg-pink-700" : "bg-emerald-600 text-white hover:bg-emerald-700"
+                        )}
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Analyzing Data...
+                          </>
+                        ) : (
+                          <>
+                            <Globe size={18} />
+                            Generate Predictions
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {aiSuggestions ? (
+                      <div className={cn(
+                        "p-6 rounded-2xl border prose prose-sm max-w-none",
+                        theme === 'dark' ? "bg-slate-800/50 border-slate-700 prose-invert" : "bg-slate-50 border-slate-100 prose-slate"
+                      )}>
+                        <Markdown>{aiSuggestions}</Markdown>
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-3xl">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Package size={32} className="text-slate-300" />
+                        </div>
+                        <p className="text-slate-400 font-medium">Click the button above to generate AI-powered restock suggestions.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          {currentView === 'settings' && (
+            <motion.div 
+              key="settings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex-1 p-4 lg:p-8 overflow-y-auto"
+            >
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+                    theme === 'clinic' ? "bg-pink-600 text-white" : "bg-emerald-600 text-white"
+                  )}>
+                    <Settings size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight">System Settings</h2>
+                    <p className="text-slate-500 text-sm">Configure automated alerts and notifications.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                  <div className={cn(
+                    "p-8 border rounded-3xl shadow-sm transition-colors",
+                    theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                  )}>
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                      <Mail size={20} className="text-blue-500" />
+                      Automated Email Alerts
+                    </h3>
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                        <div>
+                          <p className="font-bold text-sm">Daily Sales Summary</p>
+                          <p className="text-xs text-slate-500">Send an automated end-of-day sales report to the owner.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Active</span>
+                          <div className="w-10 h-5 bg-emerald-500 rounded-full relative">
+                            <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                        <div>
+                          <p className="font-bold text-sm">Low Stock Notifications</p>
+                          <p className="text-xs text-slate-500">Alert the owner immediately when stock hits threshold.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Active</span>
+                          <div className="w-10 h-5 bg-emerald-500 rounded-full relative">
+                            <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Owner Email Address</label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="email"
+                            placeholder="owner@fitwhite.com"
+                            className={cn(
+                              "flex-1 px-4 py-3 border rounded-xl text-sm focus:outline-none",
+                              theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-slate-200"
+                            )}
+                            defaultValue="owner@fitwhite.com"
+                          />
+                          <button className={cn(
+                            "px-6 py-3 rounded-xl font-bold text-sm text-white transition-all shadow-lg",
+                            theme === 'clinic' ? "bg-pink-600 hover:bg-pink-700" : "bg-emerald-600 hover:bg-emerald-700"
+                          )}>
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={cn(
+                    "p-8 border rounded-3xl shadow-sm transition-colors",
+                    theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                  )}>
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                      <Smartphone size={20} className="text-emerald-500" />
+                      SMS Notifications
+                    </h3>
+                    <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-3xl">
+                      <p className="text-slate-400 text-sm font-medium">SMS Integration requires a Twilio API Key. Please contact support to enable.</p>
                     </div>
                   </div>
                 </div>

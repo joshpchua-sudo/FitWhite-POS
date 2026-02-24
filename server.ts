@@ -47,7 +47,23 @@ db.exec(`
     name TEXT NOT NULL,
     category TEXT NOT NULL,
     price REAL NOT NULL,
-    unit TEXT DEFAULT 'pcs'
+    unit TEXT DEFAULT 'pcs',
+    low_stock_threshold INTEGER DEFAULT 10
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL, -- LOW_STOCK, DAILY_SUMMARY, SYSTEM
+    message TEXT NOT NULL,
+    branch_id TEXT,
+    is_read INTEGER DEFAULT 0,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS product_stocks (
@@ -585,6 +601,27 @@ async function startServer() {
         db.prepare("UPDATE customers SET store_credit = store_credit - ? WHERE id = ?").run(total, customerId);
       }
 
+      // Low Stock Alerts
+      const checkStock = db.prepare(`
+        SELECT p.name, ps.stock, p.low_stock_threshold, b.name as branch_name
+        FROM product_stocks ps
+        JOIN products p ON ps.product_id = p.id
+        JOIN branches b ON ps.branch_id = b.id
+        WHERE ps.product_id = ? AND ps.branch_id = ?
+      `);
+
+      for (const item of items) {
+        if (item.category !== 'Service') {
+          const status = checkStock.get(item.id, branchId) as any;
+          if (status && status.stock <= status.low_stock_threshold) {
+            db.prepare(`
+              INSERT INTO notifications (type, message, branch_id)
+              VALUES ('LOW_STOCK', ?, ?)
+            `).run(`Low stock alert: ${status.name} in ${status.branch_name} (${status.stock} remaining)`, branchId);
+          }
+        }
+      }
+
       return saleId;
     });
 
@@ -594,6 +631,50 @@ async function startServer() {
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
+  });
+
+  app.post("/api/sync", (req, res) => {
+    const { sales } = req.body;
+    if (!Array.isArray(sales)) return res.status(400).json({ error: "Invalid data" });
+
+    const results = [];
+    for (const sale of sales) {
+      try {
+        const response = db.transaction(() => {
+          const exists = db.prepare("SELECT id FROM sales WHERE timestamp = ? AND total_amount = ?").get(sale.timestamp, sale.total);
+          if (exists) return { success: true, alreadySynced: true };
+
+          const saleInfo = db.prepare(`
+            INSERT INTO sales (branch_id, total_amount, discount_amount, payment_method, customer_id, timestamp) 
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(sale.branchId, sale.total, sale.discount, sale.paymentMethod, sale.customerId, sale.timestamp);
+          
+          return { success: true, id: saleInfo.lastInsertRowid };
+        })();
+        results.push(response);
+      } catch (err) {
+        results.push({ success: false, error: (err as Error).message });
+      }
+    }
+    res.json(results);
+  });
+
+  app.get("/api/notifications", (req, res) => {
+    const branchId = req.query.branchId as string;
+    let query = "SELECT * FROM notifications";
+    const params = [];
+    if (branchId && branchId !== 'Admin') {
+      query += " WHERE branch_id = ?";
+      params.push(branchId);
+    }
+    query += " ORDER BY timestamp DESC LIMIT 50";
+    const notifications = db.prepare(query).all(...params);
+    res.json(notifications);
+  });
+
+  app.post("/api/notifications/read", (req, res) => {
+    db.prepare("UPDATE notifications SET is_read = 1").run();
+    res.json({ success: true });
   });
 
   app.get("/api/reports/daily", (req, res) => {
