@@ -387,7 +387,7 @@ async function startServer() {
     const bundles = db.prepare("SELECT * FROM bundles WHERE active = 1").all() as any[];
     for (const b of bundles) {
       b.items = db.prepare(`
-        SELECT bi.quantity, p.name, p.price 
+        SELECT bi.id, bi.quantity, p.name, p.price 
         FROM bundle_items bi 
         JOIN products p ON bi.product_id = p.id 
         WHERE bi.bundle_id = ?
@@ -633,6 +633,77 @@ async function startServer() {
     const summary = db.prepare(summaryQuery).get(...queryParams) as { total_revenue: number, total_transactions: number };
 
     res.json({ sales, summary: summary || { total_revenue: 0, total_transactions: 0 } });
+  });
+
+  app.get("/api/reports/branch-performance", (req, res) => {
+    const period = req.query.period || 'daily'; // daily, weekly, monthly, yearly
+    let dateFilter = '';
+    
+    if (period === 'daily') {
+      dateFilter = "date(timestamp) = date('now', 'localtime')";
+    } else if (period === 'weekly') {
+      dateFilter = "date(timestamp) >= date('now', 'localtime', '-7 days')";
+    } else if (period === 'monthly') {
+      dateFilter = "date(timestamp) >= date('now', 'localtime', 'start of month')";
+    } else if (period === 'yearly') {
+      dateFilter = "date(timestamp) >= date('now', 'localtime', 'start of year')";
+    }
+
+    const performance = db.prepare(`
+      SELECT b.name, b.id, COALESCE(SUM(s.total_amount), 0) as revenue, COUNT(s.id) as transactions
+      FROM branches b
+      LEFT JOIN sales s ON b.id = s.branch_id AND s.status = 'Completed' AND ${dateFilter}
+      WHERE b.id != 'Admin'
+      GROUP BY b.id
+      ORDER BY revenue DESC
+    `).all();
+
+    res.json(performance);
+  });
+
+  app.get("/api/reports/export", (req, res) => {
+    const period = req.query.period || 'daily';
+    const branchId = req.query.branchId as string;
+    let dateFilter = '';
+    const params: any[] = [];
+
+    if (period === 'daily') {
+      dateFilter = "date(s.timestamp) = date(?)";
+      params.push(req.query.date || new Date().toISOString().split('T')[0]);
+    } else if (period === 'weekly') {
+      dateFilter = "date(s.timestamp) >= date(?, '-6 days') AND date(s.timestamp) <= date(?)";
+      const endDate = req.query.date || new Date().toISOString().split('T')[0];
+      params.push(endDate, endDate);
+    } else if (period === 'monthly') {
+      dateFilter = "strftime('%Y-%m', s.timestamp) = strftime('%Y-%m', ?)";
+      params.push(req.query.date || new Date().toISOString().split('T')[0]);
+    } else if (period === 'yearly') {
+      dateFilter = "strftime('%Y', s.timestamp) = strftime('%Y', ?)";
+      params.push(req.query.date || new Date().toISOString().split('T')[0]);
+    }
+
+    let query = `
+      SELECT s.id, s.timestamp, s.total_amount, s.payment_method, s.status, s.discount_amount,
+             c.name as customer_name, b.name as branch_name,
+             GROUP_CONCAT(COALESCE(p.name, bd.name) || ' (x' || si.quantity || ')') as items
+      FROM sales s
+      LEFT JOIN sale_items si ON s.id = si.sale_id
+      LEFT JOIN products p ON si.product_id = p.id
+      LEFT JOIN bundles bd ON si.bundle_id = bd.id
+      LEFT JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN branches b ON s.branch_id = b.id
+      WHERE ${dateFilter}
+    `;
+
+    if (branchId && branchId !== 'Admin') {
+      query += ` AND s.branch_id = ?`;
+      params.push(branchId);
+    }
+
+    query += ` GROUP BY s.id ORDER BY s.timestamp DESC`;
+
+    const sales = db.prepare(query).all(...params);
+    res.json(sales);
   });
 
   app.post("/api/sales/:id/refund", (req, res) => {

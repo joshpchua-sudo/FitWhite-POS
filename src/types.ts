@@ -1,3 +1,6 @@
+export type Theme = 'light' | 'dark' | 'clinic' | 'neopos';
+export type View = 'pos' | 'inventory' | 'reports' | 'history' | 'customers' | 'bundles' | 'branches' | 'users';
+
 export interface Branch {
   id: string;
   name: string;
@@ -26,7 +29,7 @@ export interface Bundle {
   id: number;
   name: string;
   price: number;
-  items: { quantity: number; name: string; price: number }[];
+  items: { id: number; quantity: number; name: string; price: number }[];
 }
 
 export interface CartItem extends Product {
@@ -76,6 +79,13 @@ export interface Treatment {
 export interface DailySummary {
   total_revenue: number;
   total_transactions: number;
+}
+
+export interface BranchPerformance {
+  id: string;
+  name: string;
+  revenue: number;
+  transactions: number;
 }
 
 export interface User {

@@ -33,7 +33,10 @@ import {
   Sun,
   Palette,
   Menu,
-  X
+  X,
+  Download,
+  Printer,
+  Trophy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -48,11 +51,28 @@ import {
   Cell
 } from 'recharts';
 import { cn } from './lib/utils';
-import { Product, CartItem, Sale, DailySummary, User as UserType, Customer, Bundle, ProductVariant, Branch, Treatment } from './types';
+import { NavItem, PaymentOption, StatCard } from './components/ui/Common';
+import { BranchStatusCard } from './components/BranchStatusCard';
+import { Sidebar } from './components/Sidebar';
+import { Login } from './components/Login';
+import { UserManagement } from './components/UserManagement';
+import { 
+  Product, 
+  CartItem, 
+  Sale, 
+  DailySummary, 
+  User as UserType, 
+  Customer, 
+  Bundle, 
+  ProductVariant,
+  Branch, 
+  Treatment,
+  Theme,
+  View,
+  BranchPerformance
+} from './types';
 
-type View = 'pos' | 'inventory' | 'reports' | 'history' | 'customers' | 'bundles' | 'branches' | 'users';
 type PaymentMethod = 'Cash' | 'GCash' | 'Card' | 'QRPH' | 'Store Credit';
-type Theme = 'light' | 'dark' | 'clinic' | 'neopos';
 
 export default function App() {
   const [user, setUser] = useState<UserType | null>(null);
@@ -73,6 +93,9 @@ export default function App() {
   const [inventoryTab, setInventoryTab] = useState<'services' | 'products' | 'low-stock'>('products');
   const [dailySales, setDailySales] = useState<Sale[]>([]);
   const [summary, setSummary] = useState<DailySummary>({ total_revenue: 0, total_transactions: 0 });
+  const [branchPerformance, setBranchPerformance] = useState<BranchPerformance[]>([]);
+  const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
+  const [isExporting, setIsExporting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
@@ -130,8 +153,106 @@ export default function App() {
       fetchBundles();
       fetchCustomers();
       fetchDailyReports();
+      fetchBranchPerformance();
     }
-  }, [currentView, user, selectedBranchId]);
+  }, [currentView, user, selectedBranchId, reportPeriod]);
+
+  const fetchBranchPerformance = async () => {
+    try {
+      const res = await fetch(`/api/reports/branch-performance?period=${reportPeriod}`);
+      const data = await res.json();
+      setBranchPerformance(data);
+    } catch (err) {
+      console.error('Failed to fetch branch performance', err);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch(`/api/reports/export?period=${reportPeriod}&branchId=${selectedBranchId}`);
+      const data = await res.json();
+      
+      if (data.length === 0) {
+        alert('No data to export for the selected period.');
+        return;
+      }
+
+      const headers = ['ID', 'Date', 'Branch', 'Customer', 'Items', 'Payment', 'Discount', 'Total', 'Status'];
+      const rows = data.map((s: Sale) => [
+        s.id,
+        format(new Date(s.timestamp), 'yyyy-MM-dd HH:mm'),
+        s.branch_name,
+        s.customer_name || 'Walk-in',
+        s.items.replace(/,/g, ';'),
+        s.payment_method,
+        s.discount_amount,
+        s.total_amount,
+        s.status
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `FitWhite_Sales_${reportPeriod}_${selectedBranchId}_${format(new Date(), 'yyyyMMdd')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const getChartData = () => {
+    const completedSales = dailySales.filter(s => s.status === 'Completed');
+    if (reportPeriod === 'daily') {
+      const hourly = Array.from({ length: 24 }, (_, i) => ({
+        label: `${i}:00`,
+        total_amount: 0
+      }));
+      completedSales.forEach(s => {
+        const hour = new Date(s.timestamp).getHours();
+        hourly[hour].total_amount += s.total_amount;
+      });
+      return hourly.filter(h => h.total_amount > 0);
+    } else if (reportPeriod === 'weekly') {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const weekly = days.map(d => ({ label: d, total_amount: 0 }));
+      completedSales.forEach(s => {
+        const day = new Date(s.timestamp).getDay();
+        weekly[day].total_amount += s.total_amount;
+      });
+      return weekly;
+    } else if (reportPeriod === 'monthly') {
+      const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const monthly = Array.from({ length: daysInMonth }, (_, i) => ({
+        label: (i + 1).toString(),
+        total_amount: 0
+      }));
+      completedSales.forEach(s => {
+        const day = new Date(s.timestamp).getDate();
+        monthly[day - 1].total_amount += s.total_amount;
+      });
+      return monthly.filter(m => m.total_amount > 0);
+    } else {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const yearly = months.map(m => ({ label: m, total_amount: 0 }));
+      completedSales.forEach(s => {
+        const month = new Date(s.timestamp).getMonth();
+        yearly[month].total_amount += s.total_amount;
+      });
+      return yearly;
+    }
+  };
 
   // Real-time polling for HQ
   useEffect(() => {
@@ -185,10 +306,14 @@ export default function App() {
 
   const fetchDailyReports = async () => {
     try {
-      const res = await fetch(`/api/reports/daily?branchId=${selectedBranchId}`);
+      const res = await fetch(`/api/reports/export?period=${reportPeriod}&branchId=${selectedBranchId}`);
       const data = await res.json();
-      setDailySales(data.sales);
-      setSummary(data.summary);
+      
+      const totalRevenue = data.reduce((acc: number, s: any) => acc + (s.status === 'Completed' ? s.total_amount : 0), 0);
+      const totalTransactions = data.filter((s: any) => s.status === 'Completed').length;
+      
+      setDailySales(data);
+      setSummary({ total_revenue: totalRevenue, total_transactions: totalTransactions });
     } catch (err) {
       console.error('Failed to fetch reports', err);
     }
@@ -642,7 +767,7 @@ export default function App() {
     return <Login onLogin={onLoginSuccess} />;
   }
 
-  const currentBranch = branches.find(b => b.id === selectedBranchId) || { name: 'Centralized', type: 'HQ' };
+  const currentBranch = branches.find(b => b.id === selectedBranchId) || { id: 'Admin', name: 'HQ Central', type: 'COMPANY-OWNED' as const };
 
   const themeClasses = {
     light: "bg-[#F8FAFC] text-slate-900",
@@ -651,147 +776,22 @@ export default function App() {
     neopos: "bg-gray-950 text-gray-100"
   };
 
-  const sidebarClasses = {
-    light: "bg-white border-slate-200",
-    dark: "bg-slate-900 border-slate-800",
-    clinic: "bg-white border-pink-100",
-    neopos: "bg-gray-900 border-gray-800"
-  };
-
   return (
     <div className={cn("flex h-screen font-sans overflow-hidden transition-colors duration-300", themeClasses[theme])}>
-      {/* Mobile Sidebar Overlay */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
-          />
-        )}
-      </AnimatePresence>
-
       {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 border-r flex flex-col transition-all duration-300 lg:relative lg:translate-x-0 transform",
-        sidebarClasses[theme],
-        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="p-6 flex-1 overflow-y-auto">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transition-colors",
-                theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "bg-pink-600 shadow-pink-200" : "bg-emerald-600 shadow-emerald-200"
-              )}>
-                <CheckCircle2 size={24} />
-              </div>
-              <div>
-                <h1 className="font-bold text-lg tracking-tight">FitWhite</h1>
-                <p className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'dark' || theme === 'neopos' ? "text-pink-400" : "text-slate-500")}>POS System</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden p-2 text-slate-400 hover:text-slate-600"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-4">Theme Style</label>
-            <div className="flex gap-2 px-2">
-              <button 
-                onClick={() => setTheme('dark')}
-                className={cn("p-2 rounded-lg border transition-all", theme === 'dark' ? "bg-slate-800 border-pink-500 shadow-sm" : "bg-slate-50 border-transparent")}
-              >
-                <Moon size={16} className="text-pink-400" />
-              </button>
-              <button 
-                onClick={() => setTheme('clinic')}
-                className={cn("p-2 rounded-lg border transition-all", theme === 'clinic' ? "bg-pink-50 border-pink-500 shadow-sm" : "bg-slate-50 border-transparent")}
-              >
-                <Palette size={16} className="text-pink-500" />
-              </button>
-            </div>
-          </div>
-
-          {user.role === 'SUPER_ADMIN' && (
-            <div className="mb-6">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-4">Monitoring Branch</label>
-              <div className="px-2">
-                <select 
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className={cn(
-                    "w-full p-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2",
-                    theme === 'dark' || theme === 'neopos' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-pink-500/20" : "bg-slate-50 border-slate-200 focus:ring-emerald-500/20"
-                  )}
-                >
-                  <option value="Admin">All Branches (HQ)</option>
-                  <optgroup label="Company Owned">
-                    {branches.filter(b => b.type === 'COMPANY-OWNED' && b.id !== 'Admin').map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Managed">
-                    {branches.filter(b => b.type === 'MANAGED').map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-            </div>
-          )}
-
-          <nav className="space-y-1">
-            <NavItem active={currentView === 'pos'} onClick={() => { setCurrentView('pos'); setIsSidebarOpen(false); }} icon={<ShoppingCart size={20} />} label="Terminal" theme={theme} />
-            <NavItem active={currentView === 'customers'} onClick={() => { setCurrentView('customers'); setIsSidebarOpen(false); }} icon={<Users size={20} />} label="Customers" theme={theme} />
-            {(user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_MANAGER') && (
-              <>
-                <NavItem active={currentView === 'bundles'} onClick={() => { setCurrentView('bundles'); setIsSidebarOpen(false); }} icon={<Tag size={20} />} label="Bundles" theme={theme} />
-                <NavItem active={currentView === 'inventory'} onClick={() => { setCurrentView('inventory'); setIsSidebarOpen(false); }} icon={<Package size={20} />} label="Inventory" theme={theme} />
-                <NavItem active={currentView === 'reports'} onClick={() => { setCurrentView('reports'); setIsSidebarOpen(false); }} icon={<BarChart3 size={20} />} label="Reports" theme={theme} />
-              </>
-            )}
-            {user.role === 'SUPER_ADMIN' && (
-              <>
-                <NavItem active={currentView === 'branches'} onClick={() => { setCurrentView('branches'); setIsSidebarOpen(false); }} icon={<Building2 size={20} />} label="Branch Monitor" theme={theme} />
-                <NavItem active={currentView === 'users'} onClick={() => { setCurrentView('users'); setIsSidebarOpen(false); }} icon={<User size={20} />} label="Users" theme={theme} />
-              </>
-            )}
-            <NavItem active={currentView === 'history'} onClick={() => { setCurrentView('history'); setIsSidebarOpen(false); }} icon={<History size={20} />} label="History" theme={theme} />
-          </nav>
-        </div>
-
-        <div className={cn("mt-auto p-6 border-t", theme === 'dark' || theme === 'neopos' ? "border-slate-800" : "border-slate-100")}>
-          <div className={cn(
-            "mb-4 px-2 py-1 rounded-lg inline-flex items-center gap-2",
-            theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "bg-pink-50" : "bg-emerald-50"
-          )}>
-            <Globe size={12} className={theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "text-pink-600" : "text-emerald-600"} />
-            <span className={cn(
-              "text-[10px] font-black uppercase",
-              theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "text-pink-700" : "text-emerald-700"
-            )}>{selectedBranchId === 'Admin' ? 'HQ Central' : currentBranch.name}</span>
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            <div className={cn("flex items-center gap-3 p-3 rounded-xl", theme === 'dark' || theme === 'neopos' ? "bg-slate-800" : "bg-slate-50", theme === 'neopos' && "bg-gray-800")}>
-              <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
-                <User size={16} className="text-slate-600" />
-              </div>
-              <div className="overflow-hidden text-left">
-                <p className={cn("text-sm font-semibold truncate", (theme === 'dark' || theme === 'neopos') && "text-slate-200")}>{user.username}</p>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">{user.role}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <Sidebar 
+        user={user}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        theme={theme}
+        setTheme={setTheme}
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+        branches={branches}
+        selectedBranchId={selectedBranchId}
+        setSelectedBranchId={setSelectedBranchId}
+        currentBranch={currentBranch}
+      />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -1624,8 +1624,8 @@ export default function App() {
                       <div className="space-y-2 mb-6">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Included Items:</p>
                         <ul className="space-y-1">
-                          {bundle.items.map((item) => (
-                            <li key={item.name} className="text-xs text-slate-500 flex justify-between">
+                          {bundle.items.map((item, idx) => (
+                            <li key={item.id || idx} className="text-xs text-slate-500 flex justify-between">
                               <span>{item.quantity}x {item.name}</span>
                               <span className="text-slate-400">₱{item.price.toLocaleString()}</span>
                             </li>
@@ -1736,8 +1736,8 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className={cn("divide-y", theme === 'dark' ? "divide-slate-800" : "divide-slate-100")}>
-                      {dailySales.map(sale => (
-                        <tr key={sale.id} className={cn("transition-colors", theme === 'dark' ? "hover:bg-slate-800/50" : "hover:bg-slate-50/50", sale.status === 'Refunded' && "opacity-60")}>
+                      {dailySales.map((sale, idx) => (
+                        <tr key={`${sale.id}-${idx}`} className={cn("transition-colors", theme === 'dark' ? "hover:bg-slate-800/50" : "hover:bg-slate-50/50", sale.status === 'Refunded' && "opacity-60")}>
                           <td className="px-6 py-4 font-bold text-slate-500">#{sale.id}</td>
                           <td className="px-6 py-4">
                             <span className="text-[10px] font-bold text-slate-400 uppercase">{sale.branch_name}</span>
@@ -1810,21 +1810,49 @@ export default function App() {
               <div className="max-w-6xl mx-auto">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight">Daily Sales Report</h2>
-                    <p className="text-slate-500 text-xs lg:text-sm">{format(new Date(), 'EEEE, MMMM do, yyyy')}</p>
+                    <h2 className="text-xl lg:text-2xl font-bold tracking-tight capitalize">{reportPeriod} Sales Report</h2>
+                    <p className="text-slate-500 text-xs lg:text-sm">
+                      {reportPeriod === 'daily' && format(new Date(), 'EEEE, MMMM do, yyyy')}
+                      {reportPeriod === 'weekly' && 'Last 7 Days'}
+                      {reportPeriod === 'monthly' && format(new Date(), 'MMMM yyyy')}
+                      {reportPeriod === 'yearly' && format(new Date(), 'yyyy')}
+                    </p>
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                    <button className={cn(
-                      "px-4 py-2 border rounded-xl text-sm font-bold transition-colors shadow-sm",
-                      theme === 'dark' ? "bg-slate-800 border-slate-700 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
-                    )}>
-                      Export PDF
+                    <select 
+                      value={reportPeriod}
+                      onChange={(e) => setReportPeriod(e.target.value as any)}
+                      className={cn(
+                        "px-4 py-2 border rounded-xl text-sm font-bold focus:outline-none focus:ring-2",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-200 focus:ring-pink-500/20" : "bg-white border-slate-200 focus:ring-emerald-500/20"
+                      )}
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                    <button 
+                      onClick={handleExportCSV}
+                      disabled={isExporting}
+                      className={cn(
+                        "px-4 py-2 border rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50",
+                        isExporting && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <Download size={16} />
+                      {isExporting ? 'Exporting...' : 'Export CSV'}
                     </button>
-                    <button className={cn(
-                      "px-4 py-2 border rounded-xl text-sm font-bold transition-colors shadow-sm",
-                      theme === 'dark' ? "bg-slate-800 border-slate-700 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
-                    )}>
-                      Print Report
+                    <button 
+                      onClick={handlePrint}
+                      className={cn(
+                        "px-4 py-2 border rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700 hover:bg-slate-700" : "bg-white border-slate-200 hover:bg-slate-50"
+                      )}
+                    >
+                      <Printer size={16} />
+                      Print PDF
                     </button>
                   </div>
                 </div>
@@ -1854,20 +1882,19 @@ export default function App() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   {/* Chart */}
                   <div className={cn(
-                    "p-6 border rounded-2xl shadow-sm transition-colors",
+                    "lg:col-span-2 p-6 border rounded-2xl shadow-sm transition-colors",
                     theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
                   )}>
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6">Revenue Overview</h3>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={dailySales.filter(s => s.status === 'Completed').slice(0, 7).reverse()}>
+                        <BarChart data={getChartData()}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? "#334155" : "#F1F5F9"} />
                           <XAxis 
-                            dataKey="timestamp" 
-                            tickFormatter={(val) => format(new Date(val), 'HH:mm')}
+                            dataKey="label" 
                             axisLine={false}
                             tickLine={false}
                             tick={{ fontSize: 10, fill: '#94A3B8', fontWeight: 600 }}
@@ -1885,11 +1912,10 @@ export default function App() {
                               backgroundColor: theme === 'dark' ? '#1e293b' : '#fff',
                               color: theme === 'dark' ? '#f8fafc' : '#000'
                             }}
-                            labelFormatter={(val) => format(new Date(val), 'HH:mm')}
                           />
                           <Bar dataKey="total_amount" radius={[4, 4, 0, 0]}>
-                            {dailySales.map((sale) => (
-                              <Cell key={`cell-${sale.id}`} fill={theme === 'clinic' ? '#DB2777' : (sale.id % 2 === 0 ? '#10B981' : '#3B82F6')} />
+                            {getChartData().map((_, idx) => (
+                              <Cell key={`cell-${idx}`} fill={theme === 'clinic' ? '#DB2777' : (idx % 2 === 0 ? '#10B981' : '#3B82F6')} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -1897,42 +1923,101 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Recent Transactions */}
+                  {/* Branch Performance Ranking */}
                   <div className={cn(
-                    "border rounded-2xl shadow-sm flex flex-col transition-colors",
+                    "p-6 border rounded-2xl shadow-sm transition-colors",
                     theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
                   )}>
-                    <div className={cn("p-6 border-b", theme === 'dark' ? "border-slate-800" : "border-slate-100")}>
-                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Recent Transactions</h3>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Branch Performance</h3>
+                      <Trophy size={18} className="text-amber-500" />
                     </div>
-                    <div className="flex-1 overflow-y-auto max-h-64">
-                      {dailySales.length === 0 ? (
-                        <div className="p-12 text-center text-slate-400">No sales recorded yet.</div>
+                    <div className="space-y-4">
+                      {branchPerformance.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-xs">No data available</div>
                       ) : (
-                        dailySales.map(sale => (
-                          <div key={sale.id} className={cn("p-4 border-b flex items-center justify-between transition-colors", theme === 'dark' ? "border-slate-800 hover:bg-slate-800/50" : "border-slate-50 hover:bg-slate-50")}>
+                        branchPerformance.map((branch, idx) => (
+                          <div key={branch.id} className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-colors", theme === 'dark' ? "bg-slate-800 text-slate-400" : "bg-slate-50 text-slate-500")}>
-                                <Clock size={18} />
+                              <div className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                                idx === 0 ? "bg-amber-100 text-amber-700" : 
+                                idx === 1 ? "bg-slate-100 text-slate-700" :
+                                idx === 2 ? "bg-orange-100 text-orange-700" : "bg-slate-50 text-slate-400"
+                              )}>
+                                {idx + 1}
                               </div>
                               <div>
-                                <p className={cn("text-sm font-bold", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>₱{sale.total_amount.toLocaleString()}</p>
-                                <p className="text-[10px] text-slate-500 font-medium">{format(new Date(sale.timestamp), 'HH:mm:ss')}</p>
+                                <p className={cn("text-xs font-bold", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>{branch.name}</p>
+                                <p className="text-[10px] text-slate-500">{branch.transactions} transactions</p>
                               </div>
                             </div>
-                            <div className="text-right max-w-[150px]">
-                              <span className={cn(
-                                "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase mb-1 inline-block",
-                                sale.status === 'Completed' 
-                                  ? (theme === 'clinic' ? "bg-pink-50 text-pink-600" : "bg-emerald-50 text-emerald-600")
-                                  : "bg-rose-50 text-rose-600"
-                              )}>
-                                {sale.status}
-                              </span>
-                              <p className="text-[10px] text-slate-400 truncate">{sale.items}</p>
+                            <div className="text-right">
+                              <p className={cn("text-xs font-black", theme === 'clinic' ? "text-pink-600" : "text-emerald-600")}>₱{branch.revenue.toLocaleString()}</p>
+                              {idx === 0 && <span className="text-[8px] font-bold text-amber-600 uppercase">Top Performer</span>}
                             </div>
                           </div>
                         ))
+                      )}
+                    </div>
+                    {branchPerformance.length > 0 && (
+                      <div className={cn(
+                        "mt-6 p-3 rounded-xl border border-dashed",
+                        theme === 'dark' ? "bg-slate-800/50 border-slate-700" : "bg-amber-50 border-amber-200"
+                      )}>
+                        <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                          <span className="font-bold text-amber-600">Insight:</span> {branchPerformance[0].name} is currently leading with ₱{branchPerformance[0].revenue.toLocaleString()} in revenue for this period.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recent Transactions */}
+                  <div className={cn(
+                    "lg:col-span-3 border rounded-2xl shadow-sm flex flex-col transition-colors",
+                    theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                  )}>
+                    <div className={cn("p-6 border-b flex items-center justify-between", theme === 'dark' ? "border-slate-800" : "border-slate-100")}>
+                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Detailed Sales Log</h3>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">{dailySales.length} entries</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto max-h-96">
+                      {dailySales.length === 0 ? (
+                        <div className="p-12 text-center text-slate-400">No sales recorded yet.</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className={cn("border-b", theme === 'dark' ? "border-slate-800" : "border-slate-50")}>
+                                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">Time</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">Branch</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">Customer</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase text-right">Amount</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className={cn("divide-y", theme === 'dark' ? "divide-slate-800" : "divide-slate-100")}>
+                              {dailySales.map((sale, idx) => (
+                                <tr key={`${sale.id}-${idx}`} className={cn("hover:bg-slate-50/50 transition-colors", theme === 'dark' && "hover:bg-slate-800/50")}>
+                                  <td className="px-6 py-4 text-xs text-slate-500">{format(new Date(sale.timestamp), 'HH:mm')}</td>
+                                  <td className="px-6 py-4 text-xs font-bold text-slate-400">{sale.branch_name}</td>
+                                  <td className="px-6 py-4 text-xs font-bold">{sale.customer_name || 'Walk-in'}</td>
+                                  <td className="px-6 py-4 text-xs font-black text-right">₱{sale.total_amount.toLocaleString()}</td>
+                                  <td className="px-6 py-4">
+                                    <span className={cn(
+                                      "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase",
+                                      sale.status === 'Completed' 
+                                        ? (theme === 'clinic' ? "bg-pink-50 text-pink-600" : "bg-emerald-50 text-emerald-600")
+                                        : "bg-rose-50 text-rose-600"
+                                    )}>
+                                      {sale.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2598,453 +2683,4 @@ export default function App() {
   );
 }
 
-const BranchStatusCard: React.FC<{ branch: Branch, onClick: () => void, theme?: Theme }> = ({ branch, onClick, theme }) => {
-  const [stats, setStats] = useState({ revenue: 0, transactions: 0 });
-  const [loading, setLoading] = useState(true);
-  const currentTheme = theme || 'light';
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch(`/api/reports/daily?branchId=${branch.id}`);
-        const data = await res.json();
-        setStats({ revenue: data.summary.total_revenue, transactions: data.summary.total_transactions });
-      } catch (err) {
-        console.error('Failed to fetch branch stats', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, [branch.id]);
-
-  return (
-    <motion.button
-      whileHover={{ y: -4 }}
-      onClick={onClick}
-      className={cn(
-        "p-6 border rounded-2xl text-left transition-all shadow-sm hover:shadow-md group",
-        currentTheme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
-      )}
-    >
-      <div className="flex justify-between items-start mb-6">
-        <div className={cn(
-          "p-3 rounded-xl transition-colors",
-          currentTheme === 'dark' ? "bg-slate-800 group-hover:bg-emerald-900/30" : "bg-slate-50 group-hover:bg-emerald-50"
-        )}>
-          <Building2 size={24} className={cn(
-            "transition-colors",
-            currentTheme === 'dark' ? "text-slate-500 group-hover:text-emerald-400" : "text-slate-400 group-hover:text-emerald-600",
-            currentTheme === 'clinic' && "group-hover:text-pink-600"
-          )} />
-        </div>
-        <span className={cn(
-          "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
-          branch.type === 'COMPANY-OWNED' 
-            ? (currentTheme === 'clinic' ? "bg-pink-50 text-pink-600" : "bg-blue-50 text-blue-600")
-            : "bg-amber-50 text-amber-600"
-        )}>
-          {branch.type}
-        </span>
-      </div>
-      
-      <h3 className={cn("text-lg font-bold mb-1", currentTheme === 'dark' ? "text-slate-200" : "text-slate-800")}>{branch.name}</h3>
-      <p className="text-xs text-slate-500 mb-6">ID: {branch.id}</p>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Revenue Today</p>
-          <p className={cn("text-sm font-black", currentTheme === 'dark' ? "text-slate-100" : "text-slate-900")}>
-            {loading ? '...' : `₱${stats.revenue.toLocaleString()}`}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Orders</p>
-          <p className={cn("text-sm font-black", currentTheme === 'dark' ? "text-slate-100" : "text-slate-900")}>
-            {loading ? '...' : stats.transactions}
-          </p>
-        </div>
-      </div>
-
-      <div className={cn(
-        "mt-6 pt-6 border-t flex items-center justify-between transition-colors",
-        currentTheme === 'dark' ? "border-slate-800 text-emerald-400" : "border-slate-50 text-emerald-600",
-        currentTheme === 'clinic' && "text-pink-600"
-      )}>
-        <span className="text-xs font-bold">View Detailed Report</span>
-        <ChevronRight size={16} />
-      </div>
-    </motion.button>
-  );
-};
-
-function NavItem({ active, onClick, icon, label, theme }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, theme?: Theme }) {
-  const activeClasses = {
-    light: "bg-emerald-50 text-emerald-600",
-    dark: "bg-pink-900/30 text-pink-400",
-    clinic: "bg-pink-50 text-pink-600",
-    neopos: "bg-gray-800 text-pink-500"
-  };
-
-  const inactiveClasses = {
-    light: "text-slate-500 hover:bg-slate-50 hover:text-slate-800",
-    dark: "text-slate-400 hover:bg-slate-800 hover:text-slate-200",
-    clinic: "text-slate-500 hover:bg-pink-50/50 hover:text-pink-700",
-    neopos: "text-gray-400 hover:bg-gray-800 hover:text-gray-100"
-  };
-
-  const currentTheme = theme || 'light';
-
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all group",
-        active ? activeClasses[currentTheme] : inactiveClasses[currentTheme]
-      )}
-    >
-      <span className={cn("transition-colors", active ? "" : "opacity-70 group-hover:opacity-100")}>
-        {icon}
-      </span>
-      <span className="text-sm">{label}</span>
-      {active && (
-        <motion.div 
-          layoutId="active-pill" 
-          className={cn("ml-auto w-1.5 h-1.5 rounded-full", currentTheme === 'clinic' ? "bg-pink-600" : "bg-emerald-600")} 
-        />
-      )}
-    </button>
-  );
-}
-
-function PaymentOption({ active, onClick, icon, label, disabled, theme }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, disabled?: boolean, theme?: Theme }) {
-  const currentTheme = theme || 'light';
-  
-  const activeClasses = {
-    light: "bg-emerald-600 text-white border-emerald-600 shadow-sm",
-    dark: "bg-emerald-600 text-white border-emerald-600 shadow-sm",
-    clinic: "bg-pink-600 text-white border-pink-600 shadow-sm"
-  };
-
-  const inactiveClasses = {
-    light: "bg-white text-slate-500 border-slate-200 hover:border-emerald-300",
-    dark: "bg-slate-800 text-slate-400 border-slate-700 hover:border-emerald-500",
-    clinic: "bg-white text-slate-500 border-pink-100 hover:border-pink-300"
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex items-center justify-center gap-2 p-2 rounded-xl border text-xs font-bold transition-all",
-        active ? activeClasses[currentTheme] : inactiveClasses[currentTheme],
-        disabled && "opacity-40 cursor-not-allowed grayscale"
-      )}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function StatCard({ label, value, icon, trend, theme }: { label: string, value: string, icon: React.ReactNode, trend: string, theme?: Theme }) {
-  return (
-    <div className={cn(
-      "p-6 border rounded-2xl shadow-sm transition-colors",
-      theme === 'dark' || theme === 'neopos' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200",
-      theme === 'neopos' && "bg-gray-900 border-gray-800"
-    )}>
-      <div className="flex justify-between items-start mb-4">
-        <div className={cn("p-3 rounded-xl", theme === 'dark' || theme === 'neopos' ? "bg-slate-800" : "bg-slate-50", theme === 'neopos' && "bg-gray-800")}>
-          {icon}
-        </div>
-        <span className={cn(
-          "text-[10px] font-bold px-2 py-1 rounded-lg",
-          theme === 'clinic' || theme === 'dark' || theme === 'neopos' ? "text-pink-600 bg-pink-50" : "text-emerald-600 bg-emerald-50"
-        )}>
-          {trend}
-        </span>
-      </div>
-      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
-      <h4 className={cn("text-2xl font-black", theme === 'dark' || theme === 'neopos' ? "text-slate-100" : "text-slate-900")}>{value}</h4>
-    </div>
-  );
-}
-
-function Login({ onLogin }: { onLogin: (user: UserType) => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) {
-        const user = await res.json();
-        onLogin(user);
-      } else {
-        setError('Invalid username or password');
-      }
-    } catch (err) {
-      setError('Connection failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#FFF0F5] flex items-center justify-center p-6">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-pink-100 p-8"
-      >
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-pink-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-pink-200 mb-4">
-            <CheckCircle2 size={32} />
-          </div>
-          <h1 className="text-2xl font-black text-[#880E4F]">FitWhite Clinic</h1>
-          <p className="text-pink-600 font-medium">Sign in to your account</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Username</label>
-            <input 
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-pink-50/30 border border-pink-100 text-[#880E4F] rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all placeholder:text-pink-200"
-              placeholder="Enter your username"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Password</label>
-            <input 
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-pink-50/30 border border-pink-100 text-[#880E4F] rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 transition-all placeholder:text-pink-200"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-rose-600 text-sm font-medium">
-              <AlertTriangle size={16} />
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-pink-600 hover:bg-pink-700 text-white rounded-2xl font-bold shadow-lg shadow-pink-100 transition-all active:scale-[0.98] disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-8 pt-8 border-t border-pink-50 text-center">
-          <p className="text-xs text-slate-400 font-medium">
-            Contact administrator if you forgot your credentials.
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function UserManagement({ theme }: { theme: Theme }) {
-  const [users, setUsers] = useState<UserType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editingUser, setEditingUser] = useState<UserType | null>(null);
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch users', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: newUsername, password: newPassword })
-      });
-      if (res.ok) {
-        alert('User updated successfully');
-        setEditingUser(null);
-        setNewPassword('');
-        fetchUsers();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Update failed');
-      }
-    } catch (err) {
-      alert('Update failed');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return <div className="p-8 text-center">Loading users...</div>;
-
-  return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">User Management</h2>
-          <p className="text-slate-500 text-sm">Manage login credentials for managers and cashiers.</p>
-        </div>
-      </div>
-
-      <div className={cn(
-        "border rounded-2xl shadow-sm overflow-hidden",
-        theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
-      )}>
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className={cn("border-b", theme === 'dark' ? "bg-slate-800/50 border-slate-800" : "bg-slate-50 border-slate-200")}>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Username</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Role</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Branch</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className={cn("divide-y", theme === 'dark' ? "divide-slate-800" : "divide-slate-100")}>
-            {users.map(u => (
-              <tr key={u.id} className={theme === 'dark' ? "hover:bg-slate-800/50" : "hover:bg-slate-50/50"}>
-                <td className={cn("px-6 py-4 font-bold", theme === 'dark' ? "text-slate-200" : "text-slate-800")}>{u.username}</td>
-                <td className="px-6 py-4">
-                  <span className={cn(
-                    "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
-                    u.role === 'SUPER_ADMIN' ? "bg-violet-50 text-violet-600" : 
-                    u.role === 'BRANCH_MANAGER' ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
-                  )}>
-                    {u.role.replace('_', ' ')}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-xs text-slate-500">{u.branch_name || 'HQ'}</td>
-                <td className="px-6 py-4 text-right">
-                  <button 
-                    onClick={() => {
-                      setEditingUser(u);
-                      setNewUsername(u.username);
-                      setNewPassword('');
-                    }}
-                    className={cn(
-                      "text-xs font-bold hover:underline",
-                      theme === 'clinic' ? "text-pink-600" : "text-emerald-600"
-                    )}
-                  >
-                    Edit Credentials
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {editingUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={cn(
-              "w-full max-w-md p-8 rounded-3xl shadow-2xl",
-              theme === 'dark' ? "bg-slate-900 border border-slate-800" : "bg-white"
-            )}
-          >
-            <h3 className={cn("text-xl font-bold mb-2", theme === 'dark' ? "text-slate-100" : "text-slate-900")}>Edit Credentials</h3>
-            <p className="text-slate-500 text-sm mb-6">Updating credentials for <span className="font-bold text-slate-700">{editingUser.username}</span></p>
-            
-            <form onSubmit={handleUpdate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">New Username</label>
-                <input 
-                  type="text"
-                  required
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  className={cn(
-                    "w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all",
-                    theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-100 focus:ring-pink-500/20 focus:border-pink-500" : "bg-slate-50 border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  )}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">New Password</label>
-                <input 
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Leave blank to keep current"
-                  className={cn(
-                    "w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all",
-                    theme === 'dark' ? "bg-slate-800 border-slate-700 text-slate-100 focus:ring-pink-500/20 focus:border-pink-500" : "bg-slate-50 border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  )}
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className={cn(
-                    "flex-1 py-3 rounded-xl font-bold transition-all",
-                    theme === 'dark' ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  )}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className={cn(
-                    "flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50",
-                    theme === 'clinic' || theme === 'dark' ? "bg-pink-600 hover:bg-pink-700 shadow-pink-200" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
-                  )}
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-    </div>
-  );
-}
 
