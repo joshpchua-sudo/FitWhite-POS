@@ -1,9 +1,9 @@
-import { useStore } from '../store/useStore';
-import { Product, Bundle, CartItem } from '../types';
+import { useCartStore } from '../store/useCartStore';
+import { Product, Bundle, CartItem } from '../types/index';
 import { cartService } from '../services/cartService';
 
 export const useCart = () => {
-  const { cart, setCart, discount, discountType } = useStore();
+  const { cart, setCart, discount, discountType } = useCartStore();
 
   const addToCart = (product: Product, variantId?: number, variantName?: string) => {
     setCart((prev) => {

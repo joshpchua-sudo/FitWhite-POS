@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
+import { useCartStore } from '../store/useCartStore';
 import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
 import { History as HistoryIcon, Search, RotateCcw, Eye, Calendar, Printer } from 'lucide-react';
-import { Sale } from '../types';
+import { Sale } from '../types/index';
 import { format } from 'date-fns';
 
 export function History() {
-  const { theme, selectedBranchId, dailySales, setDailySales } = useStore();
+  const { theme, selectedBranchId } = useUserStore();
+  const { dailySales, setDailySales } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { Product } from '../types';
+import { Product } from '../types/index';
 
 export const productsApi = {
   getAll: (branchId: string) => apiClient.fetchProducts(branchId),

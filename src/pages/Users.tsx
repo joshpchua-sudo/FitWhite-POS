@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
 import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
 import { User, Plus, Shield, Key, Trash2, Building2 } from 'lucide-react';
-import { User as UserType } from '../types';
+import { User as UserType } from '../types/index';
 
 export function Users() {
-  const { theme, branches } = useStore();
+  const { theme, branches } = useUserStore();
   const [users, setUsers] = useState<UserType[]>([]);
 
   useEffect(() => {

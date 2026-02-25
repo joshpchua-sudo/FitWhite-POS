@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
+import { useCartStore } from '../store/useCartStore';
 import { salesApi } from '../api/sales';
 import { cn } from '../lib/utils';
 import { BarChart3, TrendingUp, ShoppingBag, Download, Calendar, Trophy } from 'lucide-react';
@@ -16,7 +17,8 @@ import {
 import { format } from 'date-fns';
 
 export function Reports() {
-  const { theme, selectedBranchId, summary, setSummary, branchPerformance, setBranchPerformance, branches } = useStore();
+  const { theme, selectedBranchId, branches } = useUserStore();
+  const { summary, setSummary, branchPerformance, setBranchPerformance } = useCartStore();
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
 
   useEffect(() => {

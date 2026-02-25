@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
+import { useCartStore } from '../store/useCartStore';
 import { productsApi } from '../api/products';
 import { cn } from '../lib/utils';
 import { Package, Plus, Search, Trash2, AlertTriangle, Tag } from 'lucide-react';
-import { Product } from '../types';
+import { Product } from '../types/index';
 
 export function Inventory() {
-  const { theme, selectedBranchId, products, setProducts } = useStore();
+  const { theme, selectedBranchId } = useUserStore();
+  const { products, setProducts } = useCartStore();
   const [inventoryTab, setInventoryTab] = useState<'products' | 'services' | 'low-stock'>('products');
   const [searchQuery, setSearchQuery] = useState('');
 

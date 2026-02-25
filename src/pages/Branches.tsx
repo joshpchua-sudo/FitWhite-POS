@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
+import { useCartStore } from '../store/useCartStore';
 import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
 import { Building2, Plus, Globe, TrendingUp, ShoppingBag, AlertTriangle } from 'lucide-react';
-import { BranchStatusCard } from '../components/BranchStatusCard';
+import { BranchStatusCard } from '../components/admin/BranchStatusCard';
 
 export function Branches() {
-  const { theme, branches, branchPerformance } = useStore();
+  const { theme, branches } = useUserStore();
+  const { branchPerformance } = useCartStore();
 
   return (
     <div className="p-6 space-y-8">

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
+import { useCartStore } from '../store/useCartStore';
 import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
 import { Tag, Plus, Search, Trash2, Package } from 'lucide-react';
-import { Bundle } from '../types';
+import { Bundle } from '../types/index';
 
 export function Bundles() {
-  const { theme, selectedBranchId, bundles, setBundles } = useStore();
+  const { theme, selectedBranchId } = useUserStore();
+  const { bundles, setBundles } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {

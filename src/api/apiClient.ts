@@ -1,4 +1,4 @@
-import { Branch, Product, Bundle, Customer, Sale, DailySummary, BranchPerformance, User, Treatment } from '../types';
+import { Branch, Product, Bundle, Customer, Sale, DailySummary, BranchPerformance, User, Treatment } from '../types/index';
 
 const API_BASE = '/api';
 

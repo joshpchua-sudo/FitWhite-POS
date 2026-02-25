@@ -1,10 +1,10 @@
 import React from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
 import { cn } from '../lib/utils';
 import { Settings as SettingsIcon, Palette, Globe, Shield, Bell, Database, Save } from 'lucide-react';
 
 export function Settings() {
-  const { theme, setTheme } = useStore();
+  const { theme, setTheme } = useUserStore();
 
   const themes: { id: any; label: string; color: string }[] = [
     { id: 'clinic', label: 'FitWhite Pink', color: 'bg-pink-500' },

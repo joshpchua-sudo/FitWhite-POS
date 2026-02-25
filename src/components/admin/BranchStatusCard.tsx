@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Building2, ChevronRight } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { Branch, Theme } from '../types';
+import { cn } from '../../lib/utils';
+import { Branch, Theme } from '../../types/index';
 
 interface BranchStatusCardProps {
   branch: Branch;

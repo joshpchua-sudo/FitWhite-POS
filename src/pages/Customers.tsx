@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../store/userStore';
+import { useCartStore } from '../store/useCartStore';
 import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
 import { Users, Plus, Search, Mail, Smartphone, History, Trash2, Wallet } from 'lucide-react';
-import { Customer } from '../types';
+import { Customer } from '../types/index';
 
 export function Customers() {
-  const { theme, selectedBranchId, customers, setCustomers } = useStore();
+  const { theme, selectedBranchId } = useUserStore();
+  const { customers, setCustomers } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {

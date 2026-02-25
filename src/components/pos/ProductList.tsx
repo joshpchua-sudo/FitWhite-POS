@@ -1,25 +1,22 @@
 import React from 'react';
-import { Product, ProductVariant } from '../../types';
-import { useStore } from '../../store/useStore';
+import { Product, ProductVariant } from '../../types/index';
+import { useUserStore } from '../../store/userStore';
+import { useCartStore } from '../../store/useCartStore';
 import { cn } from '../../lib/utils';
 import { Search, Tag, Package } from 'lucide-react';
 
-interface ProductGridProps {
+interface ProductListProps {
   products: Product[];
   onAddToCart: (product: Product, variantId?: number, variantName?: string) => void;
 }
 
-export function ProductGrid({ products, onAddToCart }: ProductGridProps) {
-  const { theme, searchQuery } = useStore();
-  
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+export function ProductList({ products, onAddToCart }: ProductListProps) {
+  const { theme } = useUserStore();
+  const { searchQuery } = useCartStore();
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {filteredProducts.map((product) => (
+      {products.map((product) => (
         <div 
           key={product.id}
           className={cn(

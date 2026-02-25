@@ -1,11 +1,13 @@
 import React from 'react';
-import { useStore } from '../../store/useStore';
+import { useUserStore } from '../../store/userStore';
+import { useCartStore } from '../../store/useCartStore';
 import { cn } from '../../lib/utils';
 import { Banknote, CreditCard, QrCode, Wallet } from 'lucide-react';
-import { PaymentMethod } from '../../types';
+import { PaymentMethod } from '../../types/index';
 
 export function PaymentOptions() {
-  const { paymentMethod, setPaymentMethod, theme } = useStore();
+  const { theme } = useUserStore();
+  const { paymentMethod, setPaymentMethod } = useCartStore();
 
   const methods: { id: PaymentMethod; icon: React.ReactNode; label: string }[] = [
     { id: 'Cash', icon: <Banknote size={20} />, label: 'Cash' },

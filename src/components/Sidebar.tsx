@@ -18,8 +18,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { NavItem } from './ui/Common';
-import { Branch, Theme, View, User as UserType } from '../types';
-import { useStore } from '../store/useStore';
+import { Branch, Theme, View, User as UserType } from '../types/index';
+import { useUserStore } from '../store/userStore';
 
 export function Sidebar() {
   const { 
@@ -33,7 +33,7 @@ export function Sidebar() {
     branches, 
     selectedBranchId, 
     setSelectedBranchId 
-  } = useStore();
+  } = useUserStore();
 
   if (!user) return null;
 

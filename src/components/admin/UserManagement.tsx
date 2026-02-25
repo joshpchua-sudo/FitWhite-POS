@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { User as UserType, Theme } from '../types';
+import { cn } from '../../lib/utils';
+import { User as UserType, Theme } from '../../types/index';
 
 interface UserManagementProps {
   theme: Theme;

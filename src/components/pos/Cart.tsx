@@ -1,12 +1,12 @@
 import React from 'react';
 import { useCart } from '../../hooks/useCart';
-import { useStore } from '../../store/useStore';
+import { useUserStore } from '../../store/userStore';
 import { cn } from '../../lib/utils';
 import { Trash2, Plus, Minus, ShoppingCart } from 'lucide-react';
 
 export function Cart() {
   const { cart, removeFromCart, updateQuantity, subtotal, discountAmount, total } = useCart();
-  const { theme } = useStore();
+  const { theme } = useUserStore();
 
   if (cart.length === 0) {
     return (

@@ -1,5 +1,6 @@
 import React from 'react';
-import { useStore } from '../../store/useStore';
+import { useUserStore } from '../../store/userStore';
+import { useCartStore } from '../../store/useCartStore';
 import { cn } from '../../lib/utils';
 import { Menu, Globe, AlertTriangle, LogOut, Bell } from 'lucide-react';
 import { format } from 'date-fns';
@@ -10,7 +11,8 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick, onLogout }: HeaderProps) {
-  const { theme, isOnline, notifications, offlineSales, user, branches, selectedBranchId } = useStore();
+  const { theme, isOnline, branches, selectedBranchId } = useUserStore();
+  const { notifications, offlineSales } = useCartStore();
   
   const currentBranch = branches.find(b => b.id === selectedBranchId) || branches[0];
 

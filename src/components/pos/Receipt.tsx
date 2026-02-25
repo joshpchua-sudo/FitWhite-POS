@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sale, CartItem, Branch } from '../../types';
+import { Sale, CartItem, Branch } from '../../types/index';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { CheckCircle2, Printer, Download, X } from 'lucide-react';

@@ -1,36 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/useStore';
-import { useCart } from '../hooks/useCart';
-import { ProductGrid } from '../components/POS/ProductGrid';
-import { Cart } from '../components/POS/Cart';
-import { PaymentOptions } from '../components/POS/PaymentOptions';
-import { Receipt } from '../components/POS/Receipt';
-import { productsApi } from '../api/products';
-import { salesApi } from '../api/sales';
-import { cn } from '../lib/utils';
+import { useUserStore } from '../../store/userStore';
+import { useCartStore } from '../../store/useCartStore';
+import { useCart } from '../../hooks/useCart';
+import { ProductList } from './ProductList';
+import { Cart } from './Cart';
+import { PaymentOptions } from './PaymentOptions';
+import { Receipt } from './Receipt';
+import { productsApi } from '../../api/products';
+import { salesApi } from '../../api/sales';
+import { cn } from '../../lib/utils';
 import { Search, UserPlus, Tag, ShoppingBag, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function POS() {
+export function POSScreen() {
   const { 
     theme, 
     selectedBranchId, 
+    isOnline,
+    branches
+  } = useUserStore();
+
+  const {
     products, 
     setProducts, 
     paymentMethod, 
     selectedCustomer, 
-    setSelectedCustomer,
-    discount,
-    setDiscount,
-    discountType,
-    setDiscountType,
-    isOnline,
     offlineSales,
     setOfflineSales,
-    branches,
     searchQuery,
     setSearchQuery
-  } = useStore();
+  } = useCartStore();
   
   const { cart, addToCart, total, subtotal, discountAmount, clearCart } = useCart();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -38,6 +37,11 @@ export function POS() {
   const [lastSale, setLastSale] = useState<any>(null);
 
   const currentBranch = branches.find(b => b.id === selectedBranchId) || branches[0];
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     if (selectedBranchId) {
@@ -116,7 +120,7 @@ export function POS() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <ProductGrid products={products} onAddToCart={addToCart} />
+          <ProductList products={filteredProducts} onAddToCart={addToCart} />
         </div>
       </div>
 

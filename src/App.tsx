@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { useStore } from './store/useStore';
+import { useUserStore } from './store/userStore';
+import { useCartStore } from './store/useCartStore';
 import { apiClient } from './api/apiClient';
 import { Header } from './components/Layout/Header';
 import { Sidebar } from './components/Sidebar';
-import { Login } from './components/Login';
-import { POS } from './pages/POS';
+import { Login } from './components/auth/Login';
+import { POSScreen as POS } from './components/pos/POSScreen';
 import { Inventory } from './pages/Inventory';
 import { Reports } from './pages/Reports';
 import { History } from './pages/History';
@@ -25,10 +26,13 @@ export default function App() {
     setBranches, 
     setIsOnline, 
     isSidebarOpen, 
-    setIsSidebarOpen,
+    setIsSidebarOpen
+  } = useUserStore();
+
+  const {
     offlineSales,
     setOfflineSales
-  } = useStore();
+  } = useCartStore();
 
   useEffect(() => {
     // Initial data fetch

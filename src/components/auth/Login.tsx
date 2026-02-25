@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
-import { useStore } from '../store/useStore';
+import { useUserStore } from '../../store/userStore';
 
 export function Login() {
-  const { setUser, setSelectedBranchId } = useStore();
+  const { setUser, setSelectedBranchId } = useUserStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
