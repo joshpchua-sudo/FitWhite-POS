@@ -48,7 +48,9 @@ db.exec(`
     category TEXT NOT NULL,
     price REAL NOT NULL,
     unit TEXT DEFAULT 'pcs',
-    low_stock_threshold INTEGER DEFAULT 10
+    low_stock_threshold INTEGER DEFAULT 10,
+    branch_id TEXT DEFAULT 'Admin',
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS notifications (
@@ -63,7 +65,9 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
+    value TEXT NOT NULL,
+    branch_id TEXT DEFAULT 'Admin',
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS product_stocks (
@@ -83,7 +87,9 @@ db.exec(`
     store_credit REAL DEFAULT 0,
     allergies TEXT,
     notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    branch_id TEXT DEFAULT 'Admin',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS treatment_history (
@@ -104,7 +110,9 @@ db.exec(`
     product_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     price_adjustment REAL DEFAULT 0,
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    branch_id TEXT DEFAULT 'Admin',
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS variant_stocks (
@@ -120,7 +128,9 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price REAL NOT NULL,
-    active INTEGER DEFAULT 1
+    active INTEGER DEFAULT 1,
+    branch_id TEXT DEFAULT 'Admin',
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS bundle_items (
@@ -128,8 +138,10 @@ db.exec(`
     bundle_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
     quantity INTEGER NOT NULL,
+    branch_id TEXT DEFAULT 'Admin',
     FOREIGN KEY (bundle_id) REFERENCES bundles(id),
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
   CREATE TABLE IF NOT EXISTS sales (
@@ -154,10 +166,23 @@ db.exec(`
     variant_id INTEGER,
     quantity INTEGER NOT NULL,
     price_at_sale REAL NOT NULL,
+    branch_id TEXT NOT NULL,
     FOREIGN KEY (sale_id) REFERENCES sales(id),
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (bundle_id) REFERENCES bundles(id),
-    FOREIGN KEY (variant_id) REFERENCES product_variants(id)
+    FOREIGN KEY (variant_id) REFERENCES product_variants(id),
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    method TEXT NOT NULL,
+    branch_id TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_id) REFERENCES sales(id),
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 `);
 
@@ -562,16 +587,22 @@ async function startServer() {
       `).run(branchId, total, discount, paymentMethod, customerId, receiptTo);
       const saleId = saleInfo.lastInsertRowid;
 
+      // Record Payment
+      db.prepare(`
+        INSERT INTO payments (sale_id, amount, method, branch_id)
+        VALUES (?, ?, ?, ?)
+      `).run(saleId, total, paymentMethod, branchId);
+
       const insertItem = db.prepare(`
-        INSERT INTO sale_items (sale_id, product_id, bundle_id, variant_id, quantity, price_at_sale) 
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO sale_items (sale_id, product_id, bundle_id, variant_id, quantity, price_at_sale, branch_id) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
       const updateStock = db.prepare("UPDATE product_stocks SET stock = stock - ? WHERE product_id = ? AND branch_id = ?");
       const updateVariantStock = db.prepare("UPDATE variant_stocks SET stock = stock - ? WHERE variant_id = ? AND branch_id = ?");
 
       // Handle regular items and variants
       for (const item of items) {
-        insertItem.run(saleId, item.id, null, item.variantId || null, item.quantity, item.price);
+        insertItem.run(saleId, item.id, null, item.variantId || null, item.quantity, item.price, branchId);
         
         if (item.variantId) {
           updateVariantStock.run(item.quantity, item.variantId, branchId);
@@ -582,7 +613,7 @@ async function startServer() {
 
       // Handle bundles
       for (const bundle of bundles || []) {
-        insertItem.run(saleId, null, bundle.id, null, bundle.quantity, bundle.price);
+        insertItem.run(saleId, null, bundle.id, null, bundle.quantity, bundle.price, branchId);
         const bItems = db.prepare("SELECT product_id, quantity FROM bundle_items WHERE bundle_id = ?").all(bundle.id) as any[];
         for (const bi of bItems) {
           const prod = db.prepare("SELECT category FROM products WHERE id = ?").get(bi.product_id) as any;
