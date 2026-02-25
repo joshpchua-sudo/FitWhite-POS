@@ -20,7 +20,7 @@ db.exec(`
   -- DROP TABLE IF EXISTS bundle_items;
   -- DROP TABLE IF EXISTS bundles;
   -- DROP TABLE IF EXISTS variant_stocks;
-  -- DROP TABLE IF EXISTS product_stocks;
+  -- DROP TABLE IF EXISTS inventory;
   -- DROP TABLE IF EXISTS product_variants;
   -- DROP TABLE IF EXISTS customers;
   -- DROP TABLE IF EXISTS users;
@@ -70,7 +70,7 @@ db.exec(`
     FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 
-  CREATE TABLE IF NOT EXISTS product_stocks (
+  CREATE TABLE IF NOT EXISTS inventory (
     product_id INTEGER NOT NULL,
     branch_id TEXT NOT NULL,
     stock INTEGER NOT NULL DEFAULT 0,
@@ -230,7 +230,7 @@ const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get() 
 if (productCount.count === 0) {
   console.log("Seeding products and services...");
   const insert = db.prepare("INSERT INTO products (name, category, price, unit) VALUES (?, ?, ?, ?)");
-  const insertStock = db.prepare("INSERT INTO product_stocks (product_id, branch_id, stock) VALUES (?, ?, ?)");
+  const insertStock = db.prepare("INSERT INTO inventory (product_id, branch_id, stock) VALUES (?, ?, ?)");
   const branches = db.prepare("SELECT id FROM branches").all() as { id: string }[];
   
   const services = [
@@ -390,7 +390,7 @@ async function startServer() {
       products = db.prepare(`
         SELECT p.*, ps.stock 
         FROM products p 
-        JOIN product_stocks ps ON p.id = ps.product_id 
+        JOIN inventory ps ON p.id = ps.product_id 
         WHERE ps.branch_id = ?
       `).all(branchId) as any[];
       
@@ -407,7 +407,7 @@ async function startServer() {
       products = db.prepare(`
         SELECT p.*, SUM(ps.stock) as stock 
         FROM products p 
-        LEFT JOIN product_stocks ps ON p.id = ps.product_id 
+        LEFT JOIN inventory ps ON p.id = ps.product_id 
         GROUP BY p.id
       `).all() as any[];
       
@@ -537,7 +537,7 @@ async function startServer() {
           
           // Initialize stock for all branches if new product
           const branches = db.prepare("SELECT id FROM branches").all() as any[];
-          const insertStock = db.prepare("INSERT INTO product_stocks (product_id, branch_id, stock) VALUES (?, ?, ?)");
+          const insertStock = db.prepare("INSERT INTO inventory (product_id, branch_id, stock) VALUES (?, ?, ?)");
           for (const b of branches) {
             insertStock.run(productId, b.id, b.id === branchId ? stockToAdd : 0);
           }
@@ -547,7 +547,7 @@ async function startServer() {
             .run(name, category, price, unit, id);
           
           if (branchId && branchId !== 'Admin') {
-            db.prepare("UPDATE product_stocks SET stock = stock + ? WHERE product_id = ? AND branch_id = ?")
+            db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ? AND branch_id = ?")
               .run(stockToAdd, id, branchId);
           }
         }
@@ -566,7 +566,7 @@ async function startServer() {
       // Server-side stock validation
       for (const item of items) {
         if (item.category !== 'Service') {
-          const currentStock = db.prepare("SELECT stock FROM product_stocks WHERE product_id = ? AND branch_id = ?")
+          const currentStock = db.prepare("SELECT stock FROM inventory WHERE product_id = ? AND branch_id = ?")
             .get(item.id, branchId) as any;
           if (!currentStock || currentStock.stock < item.quantity) {
             throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock?.stock || 0}`);
@@ -597,7 +597,7 @@ async function startServer() {
         INSERT INTO sale_items (sale_id, product_id, bundle_id, variant_id, quantity, price_at_sale, branch_id) 
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
-      const updateStock = db.prepare("UPDATE product_stocks SET stock = stock - ? WHERE product_id = ? AND branch_id = ?");
+      const updateStock = db.prepare("UPDATE inventory SET stock = stock - ? WHERE product_id = ? AND branch_id = ?");
       const updateVariantStock = db.prepare("UPDATE variant_stocks SET stock = stock - ? WHERE variant_id = ? AND branch_id = ?");
 
       // Handle regular items and variants
@@ -635,7 +635,7 @@ async function startServer() {
       // Low Stock Alerts
       const checkStock = db.prepare(`
         SELECT p.name, ps.stock, p.low_stock_threshold, b.name as branch_name
-        FROM product_stocks ps
+        FROM inventory ps
         JOIN products p ON ps.product_id = p.id
         JOIN branches b ON ps.branch_id = b.id
         WHERE ps.product_id = ? AND ps.branch_id = ?
@@ -840,7 +840,7 @@ async function startServer() {
         WHERE si.sale_id = ?
       `).all(saleId) as any[];
 
-      const updateStock = db.prepare("UPDATE product_stocks SET stock = stock + ? WHERE product_id = ? AND branch_id = ?");
+      const updateStock = db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ? AND branch_id = ?");
       const updateVariantStock = db.prepare("UPDATE variant_stocks SET stock = stock + ? WHERE variant_id = ? AND branch_id = ?");
 
       for (const item of items) {
@@ -880,14 +880,14 @@ async function startServer() {
       lowStock = db.prepare(`
         SELECT p.*, ps.stock 
         FROM products p 
-        JOIN product_stocks ps ON p.id = ps.product_id 
+        JOIN inventory ps ON p.id = ps.product_id 
         WHERE ps.branch_id = ? AND ps.stock <= 100 AND p.category != 'Service'
       `).all(branchId);
     } else {
       lowStock = db.prepare(`
         SELECT p.*, SUM(ps.stock) as stock 
         FROM products p 
-        JOIN product_stocks ps ON p.id = ps.product_id 
+        JOIN inventory ps ON p.id = ps.product_id 
         WHERE p.category != 'Service'
         GROUP BY p.id
         HAVING SUM(ps.stock) <= 100

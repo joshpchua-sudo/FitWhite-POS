@@ -58,6 +58,12 @@ interface AppState {
   
   discountType: 'fixed' | 'percent';
   setDiscountType: (type: 'fixed' | 'percent') => void;
+  
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (open: boolean) => void;
+  
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -123,4 +129,10 @@ export const useStore = create<AppState>((set) => ({
   
   discountType: 'fixed',
   setDiscountType: (discountType) => set({ discountType }),
+
+  isSidebarOpen: false,
+  setIsSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
+
+  searchQuery: '',
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
 }));

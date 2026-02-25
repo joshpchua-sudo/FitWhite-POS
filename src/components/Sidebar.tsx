@@ -19,34 +19,26 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { NavItem } from './ui/Common';
 import { Branch, Theme, View, User as UserType } from '../types';
+import { useStore } from '../store/useStore';
 
-interface SidebarProps {
-  user: UserType;
-  currentView: View;
-  setCurrentView: (view: View) => void;
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: (open: boolean) => void;
-  branches: Branch[];
-  selectedBranchId: string;
-  setSelectedBranchId: (id: string) => void;
-  currentBranch: Branch;
-}
+export function Sidebar() {
+  const { 
+    user, 
+    currentView, 
+    setCurrentView, 
+    theme, 
+    setTheme, 
+    isSidebarOpen, 
+    setIsSidebarOpen, 
+    branches, 
+    selectedBranchId, 
+    setSelectedBranchId 
+  } = useStore();
 
-export function Sidebar({
-  user,
-  currentView,
-  setCurrentView,
-  theme,
-  setTheme,
-  isSidebarOpen,
-  setIsSidebarOpen,
-  branches,
-  selectedBranchId,
-  setSelectedBranchId,
-  currentBranch
-}: SidebarProps) {
+  if (!user) return null;
+
+  const currentBranch = branches.find(b => b.id === selectedBranchId) || branches[0];
+
   const sidebarClasses = {
     light: "bg-white border-slate-200",
     dark: "bg-slate-900 border-slate-800",

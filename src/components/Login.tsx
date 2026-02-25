@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
-import { User as UserType } from '../types';
+import { useStore } from '../store/useStore';
 
-interface LoginProps {
-  onLogin: (user: UserType) => void;
-}
-
-export function Login({ onLogin }: LoginProps) {
+export function Login() {
+  const { setUser, setSelectedBranchId } = useStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,7 +22,8 @@ export function Login({ onLogin }: LoginProps) {
       });
       if (res.ok) {
         const user = await res.json();
-        onLogin(user);
+        setUser(user);
+        setSelectedBranchId(user.branch_id);
       } else {
         setError('Invalid username or password');
       }
