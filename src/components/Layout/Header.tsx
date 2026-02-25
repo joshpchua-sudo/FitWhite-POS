@@ -13,6 +13,12 @@ interface HeaderProps {
 export function Header({ onMenuClick, onLogout }: HeaderProps) {
   const { theme, isOnline, branches, selectedBranchId } = useUserStore();
   const { notifications, offlineSales } = useCartStore();
+  const [currentTime, setCurrentTime] = React.useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   
   const currentBranch = branches.find(b => b.id === selectedBranchId) || branches[0];
 
@@ -30,7 +36,7 @@ export function Header({ onMenuClick, onLogout }: HeaderProps) {
         </button>
         <div className="flex flex-col">
           <h2 className="font-black text-lg tracking-tight">
-            {format(new Date(), 'EEEE, MMMM dd')}
+            {format(currentTime, 'EEEE, MMMM dd, yyyy • hh:mm:ss a')}
           </h2>
           <div className="flex items-center gap-2">
             <div className={cn("w-2 h-2 rounded-full animate-pulse", isOnline ? "bg-emerald-500" : "bg-rose-500")} />

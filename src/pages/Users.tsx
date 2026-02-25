@@ -2,18 +2,60 @@ import React, { useState, useEffect } from 'react';
 import { useUserStore } from '../store/userStore';
 import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
-import { User, Plus, Shield, Key, Trash2, Building2 } from 'lucide-react';
+import { User, Plus, Shield, Key, Trash2, Building2, X, Edit2, Lock } from 'lucide-react';
 import { User as UserType } from '../types/index';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function Users() {
-  const { theme, branches } = useUserStore();
+  const { theme, branches, user: currentUser } = useUserStore();
   const [users, setUsers] = useState<UserType[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [newUser, setNewUser] = useState<Partial<UserType>>({
+    username: '',
+    role: 'CASHIER',
+    branch_id: branches[0]?.id || ''
+  });
 
   useEffect(() => {
     fetch('/api/users')
       .then(res => res.json())
       .then(setUsers);
   }, []);
+
+  const handleSaveUser = async () => {
+    if (!newUser.username) return;
+    try {
+      const method = editingUser ? 'PUT' : 'POST';
+      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
+      const data = await res.json();
+      if (editingUser) {
+        setUsers(users.map(u => u.id === editingUser.id ? data : u));
+      } else {
+        setUsers([...users, data]);
+      }
+      setShowAddModal(false);
+      setEditingUser(null);
+      setNewUser({ username: '', role: 'CASHIER', branch_id: branches[0]?.id || '' });
+    } catch (error) {
+      console.error("Failed to save user", error);
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this account?")) return;
+    try {
+      await fetch(`/api/users/${id}`, { method: 'DELETE' });
+      setUsers(users.filter(u => u.id !== id));
+    } catch (error) {
+      console.error("Failed to delete user", error);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
