@@ -95,4 +95,5 @@ export interface User {
   role: 'SUPER_ADMIN' | 'BRANCH_MANAGER' | 'CASHIER';
   branch_id: string;
   branch_name: string;
+  password?: string;
 }

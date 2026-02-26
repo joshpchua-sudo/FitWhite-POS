@@ -495,20 +495,54 @@ async function startServer() {
   });
 
   app.post("/api/bundles", (req, res) => {
-    const { name, price, items } = req.body;
+    const { name, price, items, branch_id } = req.body;
     try {
+      let bundleId: number | bigint;
       db.transaction(() => {
-        const info = db.prepare("INSERT INTO bundles (name, price) VALUES (?, ?)").run(name, price);
-        const bundleId = info.lastInsertRowid;
-        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity) VALUES (?, ?, ?)");
+        const info = db.prepare("INSERT INTO bundles (name, price, branch_id) VALUES (?, ?, ?)").run(name, price, branch_id || 'Admin');
+        bundleId = info.lastInsertRowid;
+        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity, branch_id) VALUES (?, ?, ?, ?)");
         for (const item of items) {
-          insertItem.run(bundleId, item.productId, item.quantity);
+          insertItem.run(bundleId, item.id, item.quantity, branch_id || 'Admin');
         }
       })();
-      res.json({ success: true });
+      const bundle = db.prepare("SELECT * FROM bundles WHERE id = ?").get(bundleId!);
+      const bundleItems = db.prepare(`
+        SELECT bi.*, p.name, p.price 
+        FROM bundle_items bi 
+        JOIN products p ON bi.product_id = p.id 
+        WHERE bi.bundle_id = ?
+      `).all(bundleId!);
+      res.json({ ...bundle, items: bundleItems });
     } catch (error) {
       console.error('Create bundle error:', error);
       res.status(500).json({ error: "Failed to create bundle" });
+    }
+  });
+
+  app.put("/api/bundles/:id", (req, res) => {
+    const { name, price, items, branch_id } = req.body;
+    const bundleId = req.params.id;
+    try {
+      db.transaction(() => {
+        db.prepare("UPDATE bundles SET name = ?, price = ?, branch_id = ? WHERE id = ?").run(name, price, branch_id || 'Admin', bundleId);
+        db.prepare("DELETE FROM bundle_items WHERE bundle_id = ?").run(bundleId);
+        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity, branch_id) VALUES (?, ?, ?, ?)");
+        for (const item of items) {
+          insertItem.run(bundleId, item.id, item.quantity, branch_id || 'Admin');
+        }
+      })();
+      const bundle = db.prepare("SELECT * FROM bundles WHERE id = ?").get(bundleId);
+      const bundleItems = db.prepare(`
+        SELECT bi.*, p.name, p.price 
+        FROM bundle_items bi 
+        JOIN products p ON bi.product_id = p.id 
+        WHERE bi.bundle_id = ?
+      `).all(bundleId);
+      res.json({ ...bundle, items: bundleItems });
+    } catch (error) {
+      console.error('Update bundle error:', error);
+      res.status(500).json({ error: "Failed to update bundle" });
     }
   });
 
@@ -556,6 +590,37 @@ async function startServer() {
     } catch (error) {
       console.error('Product save error:', error);
       res.status(500).json({ error: "Failed to save product." });
+    }
+  });
+
+  app.post("/api/products/:id/stock", (req, res) => {
+    const { delta, branch_id } = req.body;
+    const productId = req.params.id;
+    try {
+      db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ? AND branch_id = ?")
+        .run(delta, productId, branch_id || 'Admin');
+      const stock = db.prepare("SELECT stock FROM inventory WHERE product_id = ? AND branch_id = ?")
+        .get(productId, branch_id || 'Admin');
+      res.json({ stock: stock.stock });
+    } catch (error) {
+      console.error('Stock adjustment error:', error);
+      res.status(500).json({ error: "Failed to adjust stock" });
+    }
+  });
+
+  app.delete("/api/products/:id", (req, res) => {
+    const { id } = req.params;
+    try {
+      db.transaction(() => {
+        db.prepare("DELETE FROM inventory WHERE product_id = ?").run(id);
+        db.prepare("DELETE FROM bundle_items WHERE product_id = ?").run(id);
+        db.prepare("DELETE FROM sale_items WHERE product_id = ?").run(id);
+        db.prepare("DELETE FROM products WHERE id = ?").run(id);
+      })();
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete product error:', error);
+      res.status(500).json({ error: "Failed to delete product. It might be linked to existing sales." });
     }
   });
 
@@ -907,22 +972,47 @@ async function startServer() {
     res.json(users);
   });
 
+  app.post("/api/users", (req, res) => {
+    const { username, password, role, branch_id } = req.body;
+    try {
+      const info = db.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)")
+        .run(username, password, role, branch_id);
+      const user = db.prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?").get(info.lastInsertRowid);
+      res.json(user);
+    } catch (error) {
+      console.error('Create user error:', error);
+      res.status(500).json({ error: "Failed to create user. Username might already be taken." });
+    }
+  });
+
   app.put("/api/users/:id", (req, res) => {
     const { id } = req.params;
-    const { username, password } = req.body;
+    const { username, password, role, branch_id } = req.body;
     
     try {
       if (password) {
-        db.prepare("UPDATE users SET username = ?, password = ? WHERE id = ?")
-          .run(username, password, id);
+        db.prepare("UPDATE users SET username = ?, password = ?, role = ?, branch_id = ? WHERE id = ?")
+          .run(username, password, role, branch_id, id);
       } else {
-        db.prepare("UPDATE users SET username = ? WHERE id = ?")
-          .run(username, id);
+        db.prepare("UPDATE users SET username = ?, role = ?, branch_id = ? WHERE id = ?")
+          .run(username, role, branch_id, id);
       }
-      res.json({ success: true });
+      const user = db.prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?").get(id);
+      res.json(user);
     } catch (error) {
       console.error('Update user error:', error);
       res.status(500).json({ error: "Failed to update user credentials. Username might already be taken." });
+    }
+  });
+
+  app.delete("/api/users/:id", (req, res) => {
+    const { id } = req.params;
+    try {
+      db.prepare("DELETE FROM users WHERE id = ?").run(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete user error:', error);
+      res.status(500).json({ error: "Failed to delete user." });
     }
   });
 

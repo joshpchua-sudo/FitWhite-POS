@@ -50,8 +50,12 @@ export function Bundles() {
   const handleDeleteBundle = async (id: number) => {
     if (!confirm("Are you sure you want to delete this bundle?")) return;
     try {
-      await fetch(`/api/bundles/${id}`, { method: 'DELETE' });
-      setBundles(bundles.filter(b => b.id !== id));
+      const res = await apiClient.deleteBundle(id);
+      if (res.success) {
+        setBundles(bundles.filter(b => b.id !== id));
+      } else {
+        alert("Failed to delete bundle");
+      }
     } catch (error) {
       console.error("Failed to delete bundle", error);
     }

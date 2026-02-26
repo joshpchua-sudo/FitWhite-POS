@@ -111,6 +111,32 @@ export const apiClient = {
     return res.json();
   },
 
+  async deleteProduct(id: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/products/${id}`, { method: 'DELETE' });
+    return res.json();
+  },
+
+  async fetchUsers(): Promise<User[]> {
+    const res = await fetch(`${API_BASE}/users`);
+    return res.json();
+  },
+
+  async saveUser(user: any, id?: number): Promise<User> {
+    const url = id ? `${API_BASE}/users/${id}` : `${API_BASE}/users`;
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user)
+    });
+    return res.json();
+  },
+
+  async deleteUser(id: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/users/${id}`, { method: 'DELETE' });
+    return res.json();
+  },
+
   async markNotificationsRead(): Promise<{ success: boolean }> {
     const res = await fetch(`${API_BASE}/notifications/read`, { method: 'POST' });
     return res.json();

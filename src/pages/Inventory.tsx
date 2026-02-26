@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useUserStore } from '../store/userStore';
 import { useCartStore } from '../store/useCartStore';
 import { productsApi } from '../api/products';
+import { apiClient } from '../api/apiClient';
 import { cn } from '../lib/utils';
 import { Package, Plus, Search, Trash2, AlertTriangle, Tag, X, Minus, Edit2 } from 'lucide-react';
 import { Product } from '../types/index';
@@ -55,8 +56,12 @@ export function Inventory() {
   const handleDeleteProduct = async (id: number) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
     try {
-      await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      setProducts(products.filter(p => p.id !== id));
+      const res = await apiClient.deleteProduct(id);
+      if (res.success) {
+        setProducts(products.filter(p => p.id !== id));
+      } else {
+        alert("Failed to delete product. It might be linked to existing sales.");
+      }
     } catch (error) {
       console.error("Failed to delete product", error);
     }
@@ -81,7 +86,7 @@ export function Inventory() {
                          p.category.toLowerCase().includes(searchQuery.toLowerCase());
     if (inventoryTab === 'products') return matchesSearch && p.category !== 'Service';
     if (inventoryTab === 'services') return matchesSearch && p.category === 'Service';
-    if (inventoryTab === 'low-stock') return matchesSearch && p.stock <= 10 && p.category !== 'Service';
+    if (inventoryTab === 'low-stock') return matchesSearch && p.stock <= 100 && p.category !== 'Service';
     return matchesSearch;
   });
 
@@ -165,69 +170,96 @@ export function Inventory() {
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {filteredProducts.map((product) => (
-                <tr key={product.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center",
-                        theme === 'dark' ? "bg-slate-800" : "bg-slate-50"
-                      )}>
-                        {product.category === 'Service' ? <Tag size={18} className="text-slate-400" /> : <Package size={18} className="text-slate-400" />}
-                      </div>
-                      <span className="text-sm font-bold">{product.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{product.category}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-black">₱{product.price.toLocaleString()}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {product.category === 'Service' ? (
-                      <span className="text-[10px] font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg uppercase">N/A</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
+                <React.Fragment key={product.id}>
+                  <tr className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
                         <div className={cn(
-                          "w-2 h-2 rounded-full",
-                          product.stock > 20 ? "bg-emerald-500" : product.stock > 5 ? "bg-amber-500" : "bg-rose-500"
-                        )} />
-                        <span className={cn(
-                          "text-xs font-bold",
-                          product.stock > 20 ? "text-emerald-600" : product.stock > 5 ? "text-amber-600" : "text-rose-600"
-                        )}>{product.stock} {product.unit}</span>
+                          "w-10 h-10 rounded-xl flex items-center justify-center",
+                          theme === 'dark' ? "bg-slate-800" : "bg-slate-50"
+                        )}>
+                          {product.category === 'Service' ? <Tag size={18} className="text-slate-400" /> : <Package size={18} className="text-slate-400" />}
+                        </div>
+                        <span className="text-sm font-bold">{product.name}</span>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => adjustStock(product.id, 1)}
-                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all"
-                      >
-                        <Plus size={16} />
-                      </button>
-                      <button 
-                        onClick={() => adjustStock(product.id, -1)}
-                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <button 
-                        onClick={() => { setEditingProduct(product); setNewProduct(product); setShowAddModal(true); }}
-                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteProduct(product.id)}
-                        className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{product.category}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-black">₱{product.price.toLocaleString()}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {product.category === 'Service' ? (
+                        <span className="text-[10px] font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg uppercase">N/A</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "w-2 h-2 rounded-full",
+                            product.stock > 100 ? "bg-emerald-500" : product.stock > 20 ? "bg-amber-500" : "bg-rose-500"
+                          )} />
+                          <span className={cn(
+                            "text-xs font-bold",
+                            product.stock > 100 ? "text-emerald-600" : product.stock > 20 ? "text-amber-600" : "text-rose-600"
+                          )}>{product.stock} {product.unit}</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => adjustStock(product.id, 1)}
+                          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                        >
+                          <Plus size={16} />
+                        </button>
+                        <button 
+                          onClick={() => adjustStock(product.id, -1)}
+                          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                        >
+                          <Minus size={16} />
+                        </button>
+                        <button 
+                          onClick={() => { setEditingProduct(product); setNewProduct(product); setShowAddModal(true); }}
+                          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {product.variants && product.variants.length > 0 && product.variants.map(variant => (
+                    <tr key={`v-${variant.id}`} className="bg-slate-50/30 dark:bg-slate-800/20 border-l-4 border-emerald-500">
+                      <td className="px-12 py-3">
+                        <span className="text-xs font-medium text-slate-500 italic">— {variant.name}</span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Variant</span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className="text-xs font-bold text-slate-500">₱{(product.price + (variant.price_adjustment || 0)).toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            variant.stock > 10 ? "bg-emerald-400" : "bg-rose-400"
+                          )} />
+                          <span className="text-[10px] font-bold text-slate-500">{variant.stock} {product.unit}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        {/* Variant actions could go here */}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

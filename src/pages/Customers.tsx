@@ -48,8 +48,12 @@ export function Customers() {
   const handleDeleteCustomer = async (id: number) => {
     if (!confirm("Are you sure you want to delete this customer?")) return;
     try {
-      await fetch(`/api/customers/${id}`, { method: 'DELETE' });
-      setCustomers(customers.filter(c => c.id !== id));
+      const res = await apiClient.deleteCustomer(id);
+      if (res.success) {
+        setCustomers(customers.filter(c => c.id !== id));
+      } else {
+        alert("Failed to delete customer");
+      }
     } catch (error) {
       console.error("Failed to delete customer", error);
     }
@@ -59,7 +63,7 @@ export function Customers() {
     setSelectedCustomer(customer);
     setShowHistoryModal(true);
     try {
-      const res = await fetch(`/api/customers/${customer.id}/history`);
+      const res = await fetch(`/api/customers/${customer.id}/treatments`);
       const data = await res.json();
       setCustomerHistory(data);
     } catch (error) {

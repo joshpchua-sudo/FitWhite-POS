@@ -26,14 +26,7 @@ export function Users() {
   const handleSaveUser = async () => {
     if (!newUser.username) return;
     try {
-      const method = editingUser ? 'PUT' : 'POST';
-      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
-      });
-      const data = await res.json();
+      const data = await apiClient.saveUser(newUser, editingUser?.id);
       if (editingUser) {
         setUsers(users.map(u => u.id === editingUser.id ? data : u));
       } else {
@@ -50,8 +43,12 @@ export function Users() {
   const handleDeleteUser = async (id: number) => {
     if (!confirm("Are you sure you want to delete this account?")) return;
     try {
-      await fetch(`/api/users/${id}`, { method: 'DELETE' });
-      setUsers(users.filter(u => u.id !== id));
+      const res = await apiClient.deleteUser(id);
+      if (res.success) {
+        setUsers(users.filter(u => u.id !== id));
+      } else {
+        alert("Failed to delete user");
+      }
     } catch (error) {
       console.error("Failed to delete user", error);
     }
@@ -64,10 +61,13 @@ export function Users() {
           <h2 className="text-2xl font-black tracking-tight">User Management</h2>
           <p className="text-slate-500 text-sm font-medium">Control access levels and manage staff accounts.</p>
         </div>
-        <button className={cn(
-          "px-6 py-3 rounded-2xl font-bold text-white shadow-lg flex items-center gap-2 transition-all active:scale-95",
-          theme === 'clinic' ? "bg-pink-600 shadow-pink-200" : "bg-emerald-600 shadow-emerald-200"
-        )}>
+        <button 
+          onClick={() => { setEditingUser(null); setNewUser({ username: '', role: 'CASHIER', branch_id: branches[0]?.id || '' }); setShowAddModal(true); }}
+          className={cn(
+            "px-6 py-3 rounded-2xl font-bold text-white shadow-lg flex items-center gap-2 transition-all active:scale-95",
+            theme === 'clinic' ? "bg-pink-600 shadow-pink-200" : "bg-emerald-600 shadow-emerald-200"
+          )}
+        >
           <Plus size={20} />
           Create Account
         </button>
@@ -90,10 +90,16 @@ export function Users() {
                 <User size={24} />
               </div>
               <div className="flex gap-2">
-                <button className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-all">
-                  <Key size={18} />
+                <button 
+                  onClick={() => { setEditingUser(u); setNewUser(u); setShowAddModal(true); }}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-all"
+                >
+                  <Edit2 size={18} />
                 </button>
-                <button className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all">
+                <button 
+                  onClick={() => handleDeleteUser(u.id)}
+                  className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all"
+                >
                   <Trash2 size={18} />
                 </button>
               </div>
@@ -118,6 +124,102 @@ export function Users() {
           </div>
         ))}
       </div>
+
+      {/* Add/Edit User Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className={cn(
+                "w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden",
+                theme === 'dark' ? "bg-slate-900" : "bg-white"
+              )}
+            >
+              <div className="p-6 border-b flex items-center justify-between">
+                <h3 className="font-black text-lg">{editingUser ? 'Edit Account' : 'Create New Account'}</h3>
+                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Username</label>
+                  <input 
+                    type="text" 
+                    className={cn(
+                      "w-full p-3 rounded-xl border text-sm",
+                      theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"
+                    )}
+                    value={newUser.username}
+                    onChange={e => setNewUser({...newUser, username: e.target.value})}
+                  />
+                </div>
+                {!editingUser && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initial Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="password" 
+                        className={cn(
+                          "w-full pl-12 pr-4 py-3 rounded-xl border text-sm",
+                          theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"
+                        )}
+                        value={newUser.password}
+                        onChange={e => setNewUser({...newUser, password: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Access Level</label>
+                    <select 
+                      className={cn(
+                        "w-full p-3 rounded-xl border text-sm",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"
+                      )}
+                      value={newUser.role}
+                      onChange={e => setNewUser({...newUser, role: e.target.value as any})}
+                    >
+                      <option value="CASHIER">Cashier</option>
+                      <option value="BRANCH_MANAGER">Branch Manager</option>
+                      <option value="SUPER_ADMIN">Super Admin</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assign Branch</label>
+                    <select 
+                      className={cn(
+                        "w-full p-3 rounded-xl border text-sm",
+                        theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"
+                      )}
+                      value={newUser.branch_id}
+                      onChange={e => setNewUser({...newUser, branch_id: e.target.value})}
+                    >
+                      {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleSaveUser}
+                  className={cn(
+                    "w-full py-4 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95",
+                    theme === 'clinic' ? "bg-pink-600 shadow-pink-200" : "bg-emerald-600 shadow-emerald-200"
+                  )}
+                >
+                  {editingUser ? 'UPDATE ACCOUNT' : 'CREATE ACCOUNT'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

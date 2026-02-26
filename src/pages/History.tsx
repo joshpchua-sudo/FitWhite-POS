@@ -11,12 +11,13 @@ export function History() {
   const { theme, selectedBranchId } = useUserStore();
   const { dailySales, setDailySales } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
-    apiClient.fetchDailyReports(selectedBranchId).then(data => {
+    apiClient.fetchDailyReports(selectedBranchId, selectedDate).then(data => {
       setDailySales(data.sales);
     });
-  }, [selectedBranchId]);
+  }, [selectedBranchId, selectedDate]);
 
   const filteredSales = dailySales.filter(s => 
     s.id.toString().includes(searchQuery) ||
@@ -32,13 +33,18 @@ export function History() {
           <p className="text-slate-500 text-sm font-medium">Review and manage past sales and refunds.</p>
         </div>
         <div className="flex gap-2">
-          <button className={cn(
-            "px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 transition-all",
-            theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-          )}>
-            <Calendar size={16} />
-            Filter by Date
-          </button>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input 
+              type="date" 
+              className={cn(
+                "pl-10 pr-4 py-2.5 rounded-xl border font-bold text-xs focus:outline-none transition-all",
+                theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-slate-200 text-slate-600"
+              )}
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

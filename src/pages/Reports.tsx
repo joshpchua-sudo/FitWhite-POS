@@ -30,25 +30,50 @@ export function Reports() {
 
   const currentBranch = branches.find(b => b.id === selectedBranchId) || branches[0];
 
+  const exportCSV = () => {
+    const headers = ['Branch', 'Revenue', 'Transactions'];
+    const rows = branchPerformance.map(b => [b.name, b.revenue, b.transactions]);
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `performance_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportPDF = () => {
+    window.print();
+  };
+
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="p-6 space-y-8 print:p-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
           <h2 className="text-2xl font-black tracking-tight">Business Intelligence</h2>
           <p className="text-slate-500 text-sm font-medium">Real-time performance metrics and sales analytics.</p>
         </div>
         <div className="flex gap-2">
-          <button className={cn(
-            "px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 transition-all",
-            theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-          )}>
+          <button 
+            onClick={exportPDF}
+            className={cn(
+              "px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 transition-all",
+              theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
+          >
             <Download size={16} />
             Export PDF
           </button>
-          <button className={cn(
-            "px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 transition-all",
-            theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-          )}>
+          <button 
+            onClick={exportCSV}
+            className={cn(
+              "px-4 py-2.5 rounded-xl border font-bold text-xs flex items-center gap-2 transition-all",
+              theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
+          >
             <Download size={16} />
             Export CSV
           </button>
