@@ -40,17 +40,29 @@ export function Cart() {
             </div>
             
             <div className="flex items-center gap-2">
-              <div className="flex items-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-1">
+              <div className={cn(
+                "flex items-center rounded-xl border p-1",
+                theme === 'dark' ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
+              )}>
                 <button 
                   onClick={() => updateQuantity(item.id, -1, item.isBundle, item.variantId)}
-                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  className={cn(
+                    "p-1 rounded-lg transition-colors",
+                    theme === 'dark' ? "hover:bg-slate-800 text-slate-300" : "hover:bg-slate-100 text-slate-600"
+                  )}
                 >
                   <Minus size={14} />
                 </button>
-                <span className="w-8 text-center text-xs font-black">{item.quantity}</span>
+                <span className={cn(
+                  "w-8 text-center text-xs font-black",
+                  theme === 'dark' ? "text-white" : "text-slate-900"
+                )}>{item.quantity}</span>
                 <button 
                   onClick={() => updateQuantity(item.id, 1, item.isBundle, item.variantId)}
-                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  className={cn(
+                    "p-1 rounded-lg transition-colors",
+                    theme === 'dark' ? "hover:bg-slate-800 text-slate-300" : "hover:bg-slate-100 text-slate-600"
+                  )}
                 >
                   <Plus size={14} />
                 </button>

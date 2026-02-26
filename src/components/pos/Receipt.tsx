@@ -51,17 +51,17 @@ export function Receipt({ sale, branch, onClose, onPrint }: ReceiptProps) {
           <div className="border-t border-dashed border-slate-200 pt-4 space-y-1">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span>₱{(sale.total_amount! + (sale.discount_amount || 0)).toLocaleString()}</span>
+              <span>₱{((sale.total_amount || 0) + (sale.discount_amount || 0)).toLocaleString()}</span>
             </div>
-            {sale.discount_amount! > 0 && (
+            {(sale.discount_amount || 0) > 0 && (
               <div className="flex justify-between text-rose-600">
                 <span>Discount</span>
-                <span>-₱{sale.discount_amount!.toLocaleString()}</span>
+                <span>-₱{sale.discount_amount?.toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between font-black text-lg pt-2">
               <span>TOTAL</span>
-              <span>₱{sale.total_amount!.toLocaleString()}</span>
+              <span>₱{(sale.total_amount || 0).toLocaleString()}</span>
             </div>
           </div>
 
