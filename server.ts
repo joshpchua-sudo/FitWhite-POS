@@ -42,9 +42,12 @@ const branches = [
   { id: 'calamba', name: 'Calamba', type: 'MANAGED' },
   { id: 'paranaque', name: 'Paranaque', type: 'MANAGED' },
   { id: 'quezon-city', name: 'Quezon City', type: 'MANAGED' },
-  { id: 'baclaran', name: 'Baclaran', type: 'MANAGED' },
-  { id: 'silang', name: 'Silang', type: 'MANAGED' }
+  { id: 'baclaran', name: 'Baclaran', type: 'MANAGED' }
 ];
+
+// Cleanup: Remove Silang if it exists (User requested removal)
+centralDb.prepare("DELETE FROM users WHERE branch_id = 'silang'").run();
+centralDb.prepare("DELETE FROM branches WHERE id = 'silang'").run();
 
 const insertBranch = centralDb.prepare("INSERT OR REPLACE INTO branches (id, name, type) VALUES (?, ?, ?)");
 for (const b of branches) {
