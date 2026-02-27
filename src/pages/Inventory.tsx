@@ -32,22 +32,13 @@ export function Inventory() {
   const handleSaveProduct = async () => {
     if (!newProduct.name) return;
     try {
-      const method = editingProduct ? 'PUT' : 'POST';
-      const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newProduct, branch_id: selectedBranchId })
-      });
-      const data = await res.json();
-      if (editingProduct) {
-        setProducts(products.map(p => p.id === editingProduct.id ? data : p));
-      } else {
-        setProducts([...products, data]);
+      const res = await apiClient.saveProduct(newProduct, editingProduct?.id);
+      if (res.success) {
+        productsApi.getAll(selectedBranchId).then(setProducts);
+        setShowAddModal(false);
+        setEditingProduct(null);
+        setNewProduct({ name: '', category: 'Product', price: 0, stock: 0, unit: 'pcs' });
       }
-      setShowAddModal(false);
-      setEditingProduct(null);
-      setNewProduct({ name: '', category: 'Product', price: 0, stock: 0, unit: 'pcs' });
     } catch (error) {
       console.error("Failed to save product", error);
     }
@@ -69,13 +60,10 @@ export function Inventory() {
 
   const adjustStock = async (id: number, delta: number) => {
     try {
-      const res = await fetch(`/api/products/${id}/stock`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ delta })
-      });
-      const data = await res.json();
-      setProducts(products.map(p => p.id === id ? data : p));
+      const res = await apiClient.saveProduct({ delta }, id);
+      if (res.success) {
+        productsApi.getAll(selectedBranchId).then(setProducts);
+      }
     } catch (error) {
       console.error("Failed to adjust stock", error);
     }

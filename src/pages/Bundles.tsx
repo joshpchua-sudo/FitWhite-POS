@@ -26,22 +26,13 @@ export function Bundles() {
   const handleSaveBundle = async () => {
     if (!newBundle.name || newBundle.items?.length === 0) return;
     try {
-      const method = editingBundle ? 'PUT' : 'POST';
-      const url = editingBundle ? `/api/bundles/${editingBundle.id}` : '/api/bundles';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newBundle, branch_id: selectedBranchId })
-      });
-      const data = await res.json();
-      if (editingBundle) {
-        setBundles(bundles.map(b => b.id === editingBundle.id ? data : b));
-      } else {
-        setBundles([...bundles, data]);
+      const res = await apiClient.saveBundle(newBundle, editingBundle?.id);
+      if (res.success) {
+        apiClient.fetchBundles(selectedBranchId).then(setBundles);
+        setShowAddModal(false);
+        setEditingBundle(null);
+        setNewBundle({ name: '', price: 0, items: [] });
       }
-      setShowAddModal(false);
-      setEditingBundle(null);
-      setNewBundle({ name: '', price: 0, items: [] });
     } catch (error) {
       console.error("Failed to save bundle", error);
     }

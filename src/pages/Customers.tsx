@@ -31,15 +31,12 @@ export function Customers() {
   const handleAddCustomer = async () => {
     if (!newCustomer.name) return;
     try {
-      const res = await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newCustomer, branch_id: selectedBranchId })
-      });
-      const data = await res.json();
-      setCustomers([...customers, data]);
-      setShowAddModal(false);
-      setNewCustomer({ name: '', email: '', phone: '', allergies: '', notes: '' });
+      const res = await apiClient.saveCustomer(newCustomer);
+      if (res) {
+        apiClient.fetchCustomers(selectedBranchId).then(setCustomers);
+        setShowAddModal(false);
+        setNewCustomer({ name: '', email: '', phone: '', allergies: '', notes: '' });
+      }
     } catch (error) {
       console.error("Failed to add customer", error);
     }
@@ -63,8 +60,7 @@ export function Customers() {
     setSelectedCustomer(customer);
     setShowHistoryModal(true);
     try {
-      const res = await fetch(`/api/customers/${customer.id}/treatments`);
-      const data = await res.json();
+      const data = await apiClient.fetchTreatments(customer.id);
       setCustomerHistory(data);
     } catch (error) {
       console.error("Failed to fetch history", error);

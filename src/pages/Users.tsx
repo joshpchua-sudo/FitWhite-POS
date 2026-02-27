@@ -18,9 +18,7 @@ export function Users() {
   });
 
   useEffect(() => {
-    fetch('/api/users')
-      .then(res => res.json())
-      .then(setUsers);
+    apiClient.fetchUsers().then(setUsers);
   }, []);
 
   const handleSaveUser = async () => {

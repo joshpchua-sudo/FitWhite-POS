@@ -8,6 +8,7 @@ import { PaymentOptions } from './PaymentOptions';
 import { Receipt } from './Receipt';
 import { productsApi } from '../../api/products';
 import { salesApi } from '../../api/sales';
+import { apiClient } from '../../api/apiClient';
 import { cn } from '../../lib/utils';
 import { Search, UserPlus, Tag, ShoppingBag, CheckCircle2, ChevronRight, X, Percent, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -63,7 +64,9 @@ export function POSScreen() {
     if (selectedBranchId) {
       productsApi.getAll(selectedBranchId).then(setProducts);
       // Also fetch customers if needed
-      fetch('/api/customers').then(res => res.json()).then(setCustomers).catch(() => {});
+      if (selectedBranchId !== 'Admin') {
+        apiClient.fetchCustomers(selectedBranchId).then(setCustomers).catch(() => {});
+      }
     }
   }, [selectedBranchId]);
 

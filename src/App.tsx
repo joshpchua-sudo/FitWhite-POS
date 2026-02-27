@@ -26,13 +26,18 @@ export default function App() {
     setBranches, 
     setIsOnline, 
     isSidebarOpen, 
-    setIsSidebarOpen
+    setIsSidebarOpen,
+    selectedBranchId
   } = useUserStore();
 
   const {
     offlineSales,
     setOfflineSales
   } = useCartStore();
+
+  useEffect(() => {
+    apiClient.setBranchId(selectedBranchId);
+  }, [selectedBranchId]);
 
   useEffect(() => {
     // Initial data fetch

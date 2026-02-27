@@ -7,26 +7,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("pos.db");
-console.log("Initializing database...");
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// Central Database for Users and Branch Metadata
+const centralDb = new Database("central.db");
+centralDb.pragma('journal_mode = WAL');
+centralDb.pragma('foreign_keys = ON');
 
-// Initialize Database
-db.exec(`
-  -- Temporary cleanup for re-seeding
-  -- DROP TABLE IF EXISTS sale_items;
-  -- DROP TABLE IF EXISTS sales;
-  -- DROP TABLE IF EXISTS bundle_items;
-  -- DROP TABLE IF EXISTS bundles;
-  -- DROP TABLE IF EXISTS variant_stocks;
-  -- DROP TABLE IF EXISTS inventory;
-  -- DROP TABLE IF EXISTS product_variants;
-  -- DROP TABLE IF EXISTS customers;
-  -- DROP TABLE IF EXISTS users;
-  -- DROP TABLE IF EXISTS products;
-  -- DROP TABLE IF EXISTS branches;
-
+// Initialize Central Database
+centralDb.exec(`
   CREATE TABLE IF NOT EXISTS branches (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -38,201 +25,64 @@ db.exec(`
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     role TEXT NOT NULL, -- SUPER_ADMIN, BRANCH_MANAGER, CASHIER
-    branch_id TEXT DEFAULT 'Admin',
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    price REAL NOT NULL,
-    unit TEXT DEFAULT 'pcs',
-    low_stock_threshold INTEGER DEFAULT 10,
-    branch_id TEXT DEFAULT 'Admin',
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL, -- LOW_STOCK, DAILY_SUMMARY, SYSTEM
-    message TEXT NOT NULL,
     branch_id TEXT,
-    is_read INTEGER DEFAULT 0,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    branch_id TEXT DEFAULT 'Admin',
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS inventory (
-    product_id INTEGER NOT NULL,
-    branch_id TEXT NOT NULL,
-    stock INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (product_id, branch_id),
-    FOREIGN KEY (product_id) REFERENCES products(id),
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS customers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT,
-    phone TEXT,
-    store_credit REAL DEFAULT 0,
-    allergies TEXT,
-    notes TEXT,
-    branch_id TEXT DEFAULT 'Admin',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS treatment_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customer_id INTEGER NOT NULL,
-    treatment_name TEXT NOT NULL,
-    dosage TEXT,
-    notes TEXT,
-    administered_by TEXT,
-    branch_id TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (customer_id) REFERENCES customers(id),
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS product_variants (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    price_adjustment REAL DEFAULT 0,
-    branch_id TEXT DEFAULT 'Admin',
-    FOREIGN KEY (product_id) REFERENCES products(id),
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS variant_stocks (
-    variant_id INTEGER NOT NULL,
-    branch_id TEXT NOT NULL,
-    stock INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (variant_id, branch_id),
-    FOREIGN KEY (variant_id) REFERENCES product_variants(id),
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS bundles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    price REAL NOT NULL,
-    active INTEGER DEFAULT 1,
-    branch_id TEXT DEFAULT 'Admin',
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS bundle_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    bundle_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
-    quantity INTEGER NOT NULL,
-    branch_id TEXT DEFAULT 'Admin',
-    FOREIGN KEY (bundle_id) REFERENCES bundles(id),
-    FOREIGN KEY (product_id) REFERENCES products(id),
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    branch_id TEXT NOT NULL,
-    customer_id INTEGER,
-    total_amount REAL NOT NULL,
-    discount_amount REAL DEFAULT 0,
-    payment_method TEXT NOT NULL DEFAULT 'Cash',
-    status TEXT NOT NULL DEFAULT 'Completed', -- Completed, Refunded
-    receipt_sent_to TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (branch_id) REFERENCES branches(id),
-    FOREIGN KEY (customer_id) REFERENCES customers(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS sale_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sale_id INTEGER NOT NULL,
-    product_id INTEGER,
-    bundle_id INTEGER,
-    variant_id INTEGER,
-    quantity INTEGER NOT NULL,
-    price_at_sale REAL NOT NULL,
-    branch_id TEXT NOT NULL,
-    FOREIGN KEY (sale_id) REFERENCES sales(id),
-    FOREIGN KEY (product_id) REFERENCES products(id),
-    FOREIGN KEY (bundle_id) REFERENCES bundles(id),
-    FOREIGN KEY (variant_id) REFERENCES product_variants(id),
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sale_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    method TEXT NOT NULL,
-    branch_id TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (sale_id) REFERENCES sales(id),
     FOREIGN KEY (branch_id) REFERENCES branches(id)
   );
 `);
 
-// Seed initial data if empty
-const branchCount = db.prepare("SELECT COUNT(*) as count FROM branches").get() as { count: number };
-if (branchCount.count === 0) {
-  console.log("Seeding branches...");
-  const insertBranch = db.prepare("INSERT INTO branches (id, name, type) VALUES (?, ?, ?)");
-  
-  // COMPANY-OWNED
-  insertBranch.run("Admin", "Admin HQ", "COMPANY-OWNED");
-  insertBranch.run("Imus-00", "FitWhite Imus", "COMPANY-OWNED");
-  insertBranch.run("Bacolod-01", "FitWhite Bacolod", "COMPANY-OWNED");
-  insertBranch.run("Iloilo-02", "FitWhite Iloilo", "COMPANY-OWNED");
-  insertBranch.run("Pampanga-03", "FitWhite Pampanga", "COMPANY-OWNED");
-  insertBranch.run("Davao-04", "FitWhite Davao", "COMPANY-OWNED");
+// Seed Branches
+const branches = [
+  { id: 'imus', name: 'Imus', type: 'COMPANY-OWNED' },
+  { id: 'pasay', name: 'Pasay', type: 'COMPANY-OWNED' },
+  { id: 'manila', name: 'Manila', type: 'COMPANY-OWNED' },
+  { id: 'makati', name: 'Makati', type: 'COMPANY-OWNED' },
+  { id: 'iloilo', name: 'Iloilo', type: 'COMPANY-OWNED' },
+  { id: 'bacolod', name: 'Bacolod', type: 'COMPANY-OWNED' },
+  { id: 'davao', name: 'Davao', type: 'COMPANY-OWNED' },
+  { id: 'calamba', name: 'Calamba', type: 'MANAGED' },
+  { id: 'paranaque', name: 'Paranaque', type: 'MANAGED' },
+  { id: 'quezon-city', name: 'Quezon City', type: 'MANAGED' },
+  { id: 'baclaran', name: 'Baclaran', type: 'MANAGED' },
+  { id: 'silang', name: 'Silang', type: 'MANAGED' }
+];
 
-  // MANAGED
-  insertBranch.run("Calamba-05", "FitWhite Calamba", "MANAGED");
-  insertBranch.run("Manila-06", "FitWhite Manila", "MANAGED");
-  insertBranch.run("Silang-07", "FitWhite Silang", "MANAGED");
-  insertBranch.run("Baclaran-08", "FitWhite Baclaran", "MANAGED");
-  insertBranch.run("Makati-09", "FitWhite Makati", "MANAGED");
-  insertBranch.run("Pasay-10", "FitWhite Pasay", "MANAGED");
-  insertBranch.run("Paranaque-11", "FitWhite Paranaque", "MANAGED");
-  insertBranch.run("Eternalbloom-12", "FitWhite Eternalbloom", "MANAGED");
+const insertBranch = centralDb.prepare("INSERT OR REPLACE INTO branches (id, name, type) VALUES (?, ?, ?)");
+for (const b of branches) {
+  insertBranch.run(b.id, b.name, b.type);
 }
 
-const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
-if (userCount.count === 0) {
-  const insertUser = db.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)");
-  // HQ Admin
-  insertUser.run("admin", "admin123", "SUPER_ADMIN", "Admin");
-  
-  // Branch Managers
-  insertUser.run("manager_imus", "manager123", "BRANCH_MANAGER", "Imus-00");
-  insertUser.run("manager_bacoor", "manager123", "BRANCH_MANAGER", "Bacolod-01");
-  
-  // Cashiers
-  insertUser.run("cashier_imus", "cashier123", "CASHIER", "Imus-00");
-  insertUser.run("cashier_bacoor", "cashier123", "CASHIER", "Bacolod-01");
+// Ensure Admin User exists
+const adminExists = centralDb.prepare("SELECT * FROM users WHERE username = 'admin'").get();
+if (!adminExists) {
+  centralDb.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)")
+    .run('admin', 'admin123', 'SUPER_ADMIN', null);
 }
 
-const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get() as { count: number };
-if (productCount.count === 0) {
-  console.log("Seeding products and services...");
-  const insert = db.prepare("INSERT INTO products (name, category, price, unit) VALUES (?, ?, ?, ?)");
-  const insertStock = db.prepare("INSERT INTO inventory (product_id, branch_id, stock) VALUES (?, ?, ?)");
-  const branches = db.prepare("SELECT id FROM branches").all() as { id: string }[];
+// Seed Users for each branch
+for (const b of branches) {
+  const managerUsername = `manager_${b.id}`;
+  const cashierUsername = `cashier_${b.id}`;
   
+  if (!centralDb.prepare("SELECT * FROM users WHERE username = ?").get(managerUsername)) {
+    centralDb.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)")
+      .run(managerUsername, 'manager123', 'BRANCH_MANAGER', b.id);
+  }
+  
+  if (!centralDb.prepare("SELECT * FROM users WHERE username = ?").get(cashierUsername)) {
+    centralDb.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)")
+      .run(cashierUsername, 'cashier123', 'CASHIER', b.id);
+  }
+}
+
+const branchDbConnections: Record<string, any> = {};
+
+function seedBranchDb(db: any) {
+  const productCount = db.prepare("SELECT COUNT(*) as count FROM products").get() as { count: number };
+  if (productCount.count > 0) return;
+
+  const insertProduct = db.prepare("INSERT INTO products (name, category, price, unit) VALUES (?, ?, ?, ?)");
+  const insertInventory = db.prepare("INSERT INTO inventory (product_id, stock) VALUES (?, ?)");
+
   const services = [
     "FAT MELTING IV PUSH", "BEAUTIGENESIS GLOW IV PUSH", "HANGOVER COCKTAIL DRIP", "EMPRESS ADVANCE DRIP",
     "PREMIER ROYALTY DRIP", "MELASMA & SCAR REMOVER DRIP", "FIT & WHITE DUO DRIP", "CELESTIAL YOUTH DRIP",
@@ -299,53 +149,123 @@ if (productCount.count === 0) {
     "Tea Tree Soothing gel", "Mupirucin", "Etherium", "Fougera", "BINDER CORSET"
   ];
 
-  db.transaction(() => {
-    for (const s of services) {
-      const info = insert.run(s, "Service", 1000, "session");
-      for (const b of branches) {
-        insertStock.run(info.lastInsertRowid, b.id, 999);
-      }
-    }
-
-    for (const a of addons) {
-      const info = insert.run(a, "Add-on", 500, "pcs");
-      for (const b of branches) {
-        insertStock.run(info.lastInsertRowid, b.id, 50);
-      }
-      
-      // Add some variants for certain products
-      if (a.includes("SOAP")) {
-        const insertVariant = db.prepare("INSERT INTO product_variants (product_id, name, price_adjustment) VALUES (?, ?, ?)");
-        const insertVariantStock = db.prepare("INSERT INTO variant_stocks (variant_id, branch_id, stock) VALUES (?, ?, ?)");
-        
-        const v1 = insertVariant.run(info.lastInsertRowid, "Small (50g)", -50);
-        const v2 = insertVariant.run(info.lastInsertRowid, "Large (150g)", 50);
-        
-        for (const b of branches) {
-          insertVariantStock.run(v1.lastInsertRowid, b.id, 20);
-          insertVariantStock.run(v2.lastInsertRowid, b.id, 30);
-        }
-      }
-    }
-  })();
-
-  // Seed some bundles
-  const insertBundle = db.prepare("INSERT INTO bundles (name, price) VALUES (?, ?)");
-  const insertBundleItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity) VALUES (?, ?, ?)");
-  
-  const b1 = insertBundle.run("Glow Up Bundle", 5000);
-  const p1 = db.prepare("SELECT id FROM products WHERE name = 'FAT MELTING IV PUSH'").get() as any;
-  const p2 = db.prepare("SELECT id FROM products WHERE name = 'WHITENING BOOSTER'").get() as any;
-  if (p1 && p2) {
-    insertBundleItem.run(b1.lastInsertRowid, p1.id, 1);
-    insertBundleItem.run(b1.lastInsertRowid, p2.id, 1);
+  for (const s of services) {
+    const info = insertProduct.run(s, "Service", 1000, "session");
+    insertInventory.run(info.lastInsertRowid, 999);
   }
 
-  // Seed some customers
-  const insertCustomer = db.prepare("INSERT INTO customers (name, email, phone, store_credit) VALUES (?, ?, ?, ?)");
-  insertCustomer.run("John Doe", "john@example.com", "09123456789", 1000);
-  insertCustomer.run("Jane Smith", "jane@example.com", "09987654321", 0);
+  for (const a of addons) {
+    const info = insertProduct.run(a, "Add-on", 500, "pcs");
+    insertInventory.run(info.lastInsertRowid, 50);
+  }
 }
+
+function getBranchDb(branchId: string) {
+  if (!branchId || branchId === 'Admin' || branchId === 'HQ') return null;
+  
+  if (!branchDbConnections[branchId]) {
+    const dbPath = path.join(__dirname, `branch_${branchId}.db`);
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    
+    // Initialize Branch Database Schema
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        price REAL NOT NULL,
+        unit TEXT DEFAULT 'pcs',
+        low_stock_threshold INTEGER DEFAULT 10
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory (
+        product_id INTEGER PRIMARY KEY,
+        stock INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        store_credit REAL DEFAULT 0,
+        allergies TEXT,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS treatment_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        treatment_name TEXT NOT NULL,
+        dosage TEXT,
+        notes TEXT,
+        administered_by TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS bundles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        price REAL NOT NULL,
+        active INTEGER DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS bundle_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bundle_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        quantity INTEGER NOT NULL,
+        FOREIGN KEY (bundle_id) REFERENCES bundles(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS sales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER,
+        total_amount REAL NOT NULL,
+        discount_amount REAL DEFAULT 0,
+        payment_method TEXT NOT NULL,
+        status TEXT DEFAULT 'Completed',
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS sale_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        product_id INTEGER,
+        bundle_id INTEGER,
+        quantity INTEGER NOT NULL,
+        price_at_sale REAL NOT NULL,
+        FOREIGN KEY (sale_id) REFERENCES sales(id),
+        FOREIGN KEY (product_id) REFERENCES products(id),
+        FOREIGN KEY (bundle_id) REFERENCES bundles(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    seedBranchDb(db);
+    branchDbConnections[branchId] = db;
+  }
+  return branchDbConnections[branchId];
+}
+
 
 async function startServer() {
   const app = express();
@@ -353,10 +273,20 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Middleware to attach branch DB
+  app.use((req, res, next) => {
+    const branchId = req.headers['x-branch-id'] as string || req.query.branchId as string;
+    if (branchId && branchId !== 'Admin' && branchId !== 'HQ') {
+      (req as any).branchDb = getBranchDb(branchId);
+      (req as any).branchId = branchId;
+    }
+    next();
+  });
+
   // Auth Routes
   app.post("/api/login", (req, res) => {
     const { username, password } = req.body;
-    const user = db.prepare(`
+    const user = centralDb.prepare(`
       SELECT u.*, b.name as branch_name 
       FROM users u 
       LEFT JOIN branches b ON u.branch_id = b.id 
@@ -368,8 +298,8 @@ async function startServer() {
         id: user.id, 
         username: user.username, 
         role: user.role, 
-        branch_id: user.branch_id,
-        branch_name: user.branch_name
+        branch_id: user.branch_id || 'HQ',
+        branch_name: user.branch_name || 'Headquarters'
       });
     } else {
       res.status(401).json({ error: "Invalid credentials" });
@@ -377,54 +307,31 @@ async function startServer() {
   });
 
   app.get("/api/branches", (req, res) => {
-    const branches = db.prepare("SELECT * FROM branches").all();
+    const branches = centralDb.prepare("SELECT * FROM branches").all();
     res.json(branches);
   });
 
   // API Routes
   app.get("/api/products", (req, res) => {
-    const branchId = req.query.branchId as string;
-    let products;
-    
-    if (branchId && branchId !== 'Admin') {
-      products = db.prepare(`
-        SELECT p.*, ps.stock 
-        FROM products p 
-        JOIN inventory ps ON p.id = ps.product_id 
-        WHERE ps.branch_id = ?
-      `).all(branchId) as any[];
-      
-      for (const p of products) {
-        p.variants = db.prepare(`
-          SELECT pv.*, vs.stock 
-          FROM product_variants pv 
-          JOIN variant_stocks vs ON pv.id = vs.variant_id 
-          WHERE vs.branch_id = ? AND pv.product_id = ?
-        `).all(branchId, p.id);
-      }
-    } else {
-      // Aggregated stock for Admin
-      products = db.prepare(`
-        SELECT p.*, SUM(ps.stock) as stock 
-        FROM products p 
-        LEFT JOIN inventory ps ON p.id = ps.product_id 
-        GROUP BY p.id
-      `).all() as any[];
-      
-      for (const p of products) {
-        p.variants = db.prepare(`
-          SELECT pv.*, SUM(vs.stock) as stock 
-          FROM product_variants pv 
-          LEFT JOIN variant_stocks vs ON pv.id = vs.variant_id 
-          WHERE pv.product_id = ?
-          GROUP BY pv.id
-        `).all(p.id);
-      }
+    const db = (req as any).branchDb;
+    if (!db) {
+      // HQ view - return all products from all branches or just a list
+      // For now, let's return an empty list or handle HQ specifically
+      return res.json([]);
     }
+    
+    const products = db.prepare(`
+      SELECT p.*, i.stock 
+      FROM products p 
+      LEFT JOIN inventory i ON p.id = i.product_id
+    `).all();
     res.json(products);
   });
 
   app.get("/api/bundles", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.json([]);
+    
     const bundles = db.prepare("SELECT * FROM bundles WHERE active = 1").all() as any[];
     for (const b of bundles) {
       b.items = db.prepare(`
@@ -438,11 +345,17 @@ async function startServer() {
   });
 
   app.get("/api/customers", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.json([]);
+    
     const customers = db.prepare("SELECT * FROM customers ORDER BY name ASC").all();
     res.json(customers);
   });
 
   app.post("/api/customers", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     const { name, email, phone, store_credit, allergies, notes } = req.body;
     const info = db.prepare("INSERT INTO customers (name, email, phone, store_credit, allergies, notes) VALUES (?, ?, ?, ?, ?, ?)")
       .run(name, email, phone, store_credit || 0, allergies || '', notes || '');
@@ -450,6 +363,9 @@ async function startServer() {
   });
 
   app.put("/api/customers/:id", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     const { name, email, phone, store_credit, allergies, notes } = req.body;
     db.prepare("UPDATE customers SET name = ?, email = ?, phone = ?, store_credit = ?, allergies = ?, notes = ? WHERE id = ?")
       .run(name, email, phone, store_credit, allergies, notes, req.params.id);
@@ -457,31 +373,34 @@ async function startServer() {
   });
 
   app.get("/api/customers/:id/treatments", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.json([]);
+    
     const treatments = db.prepare(`
-      SELECT th.*, b.name as branch_name 
-      FROM treatment_history th
-      LEFT JOIN branches b ON th.branch_id = b.id
-      WHERE th.customer_id = ?
-      ORDER BY th.timestamp DESC
+      SELECT * FROM treatment_history 
+      WHERE customer_id = ?
+      ORDER BY timestamp DESC
     `).all(req.params.id);
     res.json(treatments);
   });
 
   app.post("/api/customers/:id/treatments", (req, res) => {
-    const { treatment_name, dosage, notes, administered_by, branch_id } = req.body;
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
+    const { treatment_name, dosage, notes, administered_by } = req.body;
     const info = db.prepare(`
-      INSERT INTO treatment_history (customer_id, treatment_name, dosage, notes, administered_by, branch_id)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(req.params.id, treatment_name, dosage, notes, administered_by, branch_id);
+      INSERT INTO treatment_history (customer_id, treatment_name, dosage, notes, administered_by)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.params.id, treatment_name, dosage, notes, administered_by);
     res.json({ id: info.lastInsertRowid });
   });
 
   app.delete("/api/customers/:id", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     const customerId = parseInt(req.params.id);
-    if (isNaN(customerId)) {
-      return res.status(400).json({ error: "Invalid customer ID" });
-    }
-
     try {
       db.transaction(() => {
         db.prepare("UPDATE sales SET customer_id = NULL WHERE customer_id = ?").run(customerId);
@@ -489,21 +408,23 @@ async function startServer() {
       })();
       res.json({ success: true });
     } catch (error) {
-      console.error('Delete customer error:', error);
       res.status(500).json({ error: "Failed to delete customer profile." });
     }
   });
 
   app.post("/api/bundles", (req, res) => {
-    const { name, price, items, branch_id } = req.body;
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
+    const { name, price, items } = req.body;
     try {
       let bundleId: number | bigint;
       db.transaction(() => {
-        const info = db.prepare("INSERT INTO bundles (name, price, branch_id) VALUES (?, ?, ?)").run(name, price, branch_id || 'Admin');
+        const info = db.prepare("INSERT INTO bundles (name, price) VALUES (?, ?)").run(name, price);
         bundleId = info.lastInsertRowid;
-        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity, branch_id) VALUES (?, ?, ?, ?)");
+        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity) VALUES (?, ?, ?)");
         for (const item of items) {
-          insertItem.run(bundleId, item.id, item.quantity, branch_id || 'Admin');
+          insertItem.run(bundleId, item.id, item.quantity);
         }
       })();
       const bundle = db.prepare("SELECT * FROM bundles WHERE id = ?").get(bundleId!);
@@ -515,21 +436,23 @@ async function startServer() {
       `).all(bundleId!);
       res.json({ ...bundle, items: bundleItems });
     } catch (error) {
-      console.error('Create bundle error:', error);
       res.status(500).json({ error: "Failed to create bundle" });
     }
   });
 
   app.put("/api/bundles/:id", (req, res) => {
-    const { name, price, items, branch_id } = req.body;
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
+    const { name, price, items } = req.body;
     const bundleId = req.params.id;
     try {
       db.transaction(() => {
-        db.prepare("UPDATE bundles SET name = ?, price = ?, branch_id = ? WHERE id = ?").run(name, price, branch_id || 'Admin', bundleId);
+        db.prepare("UPDATE bundles SET name = ?, price = ? WHERE id = ?").run(name, price, bundleId);
         db.prepare("DELETE FROM bundle_items WHERE bundle_id = ?").run(bundleId);
-        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity, branch_id) VALUES (?, ?, ?, ?)");
+        const insertItem = db.prepare("INSERT INTO bundle_items (bundle_id, product_id, quantity) VALUES (?, ?, ?)");
         for (const item of items) {
-          insertItem.run(bundleId, item.id, item.quantity, branch_id || 'Admin');
+          insertItem.run(bundleId, item.id, item.quantity);
         }
       })();
       const bundle = db.prepare("SELECT * FROM bundles WHERE id = ?").get(bundleId);
@@ -541,26 +464,43 @@ async function startServer() {
       `).all(bundleId);
       res.json({ ...bundle, items: bundleItems });
     } catch (error) {
-      console.error('Update bundle error:', error);
       res.status(500).json({ error: "Failed to update bundle" });
     }
   });
 
   app.delete("/api/bundles/:id", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     const bundleId = parseInt(req.params.id);
     try {
-      // Instead of deleting, we mark as inactive to preserve sales history
       db.prepare("UPDATE bundles SET active = 0 WHERE id = ?").run(bundleId);
       res.json({ success: true });
     } catch (error) {
-      console.error('Delete bundle error:', error);
       res.status(500).json({ error: "Failed to delete bundle" });
     }
   });
 
-  app.post("/api/products", (req, res) => {
-    const { id, name, category, price, stockToAdd, unit, branchId } = req.body;
+  app.put("/api/products/:id", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
     
+    const { name, category, price, unit } = req.body;
+    const { id } = req.params;
+    try {
+      db.prepare("UPDATE products SET name = ?, category = ?, price = ?, unit = ? WHERE id = ?")
+        .run(name, category, price, unit, id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update product." });
+    }
+  });
+
+  app.post("/api/products", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
+    const { id, name, category, price, stockToAdd, unit } = req.body;
     try {
       db.transaction(() => {
         let productId = id;
@@ -568,47 +508,40 @@ async function startServer() {
           const info = db.prepare("INSERT INTO products (name, category, price, unit) VALUES (?, ?, ?, ?)")
             .run(name, category, price, unit);
           productId = info.lastInsertRowid;
-          
-          // Initialize stock for all branches if new product
-          const branches = db.prepare("SELECT id FROM branches").all() as any[];
-          const insertStock = db.prepare("INSERT INTO inventory (product_id, branch_id, stock) VALUES (?, ?, ?)");
-          for (const b of branches) {
-            insertStock.run(productId, b.id, b.id === branchId ? stockToAdd : 0);
-          }
+          db.prepare("INSERT INTO inventory (product_id, stock) VALUES (?, ?)").run(productId, stockToAdd || 0);
         } else {
-          // Update existing product
           db.prepare("UPDATE products SET name = ?, category = ?, price = ?, unit = ? WHERE id = ?")
             .run(name, category, price, unit, id);
-          
-          if (branchId && branchId !== 'Admin') {
-            db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ? AND branch_id = ?")
-              .run(stockToAdd, id, branchId);
+          if (stockToAdd) {
+            db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ?").run(stockToAdd, id);
           }
         }
       })();
       res.json({ success: true });
     } catch (error) {
-      console.error('Product save error:', error);
       res.status(500).json({ error: "Failed to save product." });
     }
   });
 
   app.post("/api/products/:id/stock", (req, res) => {
-    const { delta, branch_id } = req.body;
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
+    const { delta } = req.body;
     const productId = req.params.id;
     try {
-      db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ? AND branch_id = ?")
-        .run(delta, productId, branch_id || 'Admin');
-      const stock = db.prepare("SELECT stock FROM inventory WHERE product_id = ? AND branch_id = ?")
-        .get(productId, branch_id || 'Admin');
+      db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ?").run(delta, productId);
+      const stock = db.prepare("SELECT stock FROM inventory WHERE product_id = ?").get(productId);
       res.json({ stock: stock.stock });
     } catch (error) {
-      console.error('Stock adjustment error:', error);
       res.status(500).json({ error: "Failed to adjust stock" });
     }
   });
 
   app.delete("/api/products/:id", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     const { id } = req.params;
     try {
       db.transaction(() => {
@@ -619,103 +552,59 @@ async function startServer() {
       })();
       res.json({ success: true });
     } catch (error) {
-      console.error('Delete product error:', error);
-      res.status(500).json({ error: "Failed to delete product. It might be linked to existing sales." });
+      res.status(500).json({ error: "Failed to delete product." });
     }
   });
 
   app.post("/api/checkout", (req, res) => {
-    const { items, bundles, total, discount, paymentMethod, customerId, receiptTo, branchId } = req.body;
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
+    const { items, bundles, total, discount, paymentMethod, customerId, receiptTo } = req.body;
     
     const transaction = db.transaction(() => {
-      // Server-side stock validation
+      // Stock validation
       for (const item of items) {
         if (item.category !== 'Service') {
-          const currentStock = db.prepare("SELECT stock FROM inventory WHERE product_id = ? AND branch_id = ?")
-            .get(item.id, branchId) as any;
+          const currentStock = db.prepare("SELECT stock FROM inventory WHERE product_id = ?").get(item.id) as any;
           if (!currentStock || currentStock.stock < item.quantity) {
-            throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock?.stock || 0}`);
-          }
-        }
-        if (item.variantId) {
-          const currentVariantStock = db.prepare("SELECT stock FROM variant_stocks WHERE variant_id = ? AND branch_id = ?")
-            .get(item.variantId, branchId) as any;
-          if (!currentVariantStock || currentVariantStock.stock < item.quantity) {
-            throw new Error(`Insufficient stock for variant of ${item.name}. Available: ${currentVariantStock?.stock || 0}`);
+            throw new Error(`Insufficient stock for ${item.name}`);
           }
         }
       }
 
       const saleInfo = db.prepare(`
-        INSERT INTO sales (branch_id, total_amount, discount_amount, payment_method, customer_id, receipt_sent_to) 
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(branchId, total, discount, paymentMethod, customerId, receiptTo);
+        INSERT INTO sales (total_amount, discount_amount, payment_method, customer_id) 
+        VALUES (?, ?, ?, ?)
+      `).run(total, discount, paymentMethod, customerId);
       const saleId = saleInfo.lastInsertRowid;
 
-      // Record Payment
-      db.prepare(`
-        INSERT INTO payments (sale_id, amount, method, branch_id)
-        VALUES (?, ?, ?, ?)
-      `).run(saleId, total, paymentMethod, branchId);
-
       const insertItem = db.prepare(`
-        INSERT INTO sale_items (sale_id, product_id, bundle_id, variant_id, quantity, price_at_sale, branch_id) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO sale_items (sale_id, product_id, bundle_id, quantity, price_at_sale) 
+        VALUES (?, ?, ?, ?, ?)
       `);
-      const updateStock = db.prepare("UPDATE inventory SET stock = stock - ? WHERE product_id = ? AND branch_id = ?");
-      const updateVariantStock = db.prepare("UPDATE variant_stocks SET stock = stock - ? WHERE variant_id = ? AND branch_id = ?");
+      const updateStock = db.prepare("UPDATE inventory SET stock = stock - ? WHERE product_id = ?");
 
-      // Handle regular items and variants
       for (const item of items) {
-        insertItem.run(saleId, item.id, null, item.variantId || null, item.quantity, item.price, branchId);
-        
-        if (item.variantId) {
-          updateVariantStock.run(item.quantity, item.variantId, branchId);
-        } else if (item.category !== 'Service') {
-          updateStock.run(item.quantity, item.id, branchId);
+        insertItem.run(saleId, item.id, null, item.quantity, item.price);
+        if (item.category !== 'Service') {
+          updateStock.run(item.quantity, item.id);
         }
       }
 
-      // Handle bundles
       for (const bundle of bundles || []) {
-        insertItem.run(saleId, null, bundle.id, null, bundle.quantity, bundle.price, branchId);
+        insertItem.run(saleId, null, bundle.id, bundle.quantity, bundle.price);
         const bItems = db.prepare("SELECT product_id, quantity FROM bundle_items WHERE bundle_id = ?").all(bundle.id) as any[];
         for (const bi of bItems) {
           const prod = db.prepare("SELECT category FROM products WHERE id = ?").get(bi.product_id) as any;
           if (prod.category !== 'Service') {
-            updateStock.run(bi.quantity * bundle.quantity, bi.product_id, branchId);
+            updateStock.run(bi.quantity * bundle.quantity, bi.product_id);
           }
         }
       }
 
-      // Handle store credit if payment method is Store Credit
       if (paymentMethod === 'Store Credit' && customerId) {
-        const customer = db.prepare("SELECT store_credit FROM customers WHERE id = ?").get(customerId) as any;
-        if (customer.store_credit < total) {
-          throw new Error("Insufficient store credit");
-        }
         db.prepare("UPDATE customers SET store_credit = store_credit - ? WHERE id = ?").run(total, customerId);
-      }
-
-      // Low Stock Alerts
-      const checkStock = db.prepare(`
-        SELECT p.name, ps.stock, p.low_stock_threshold, b.name as branch_name
-        FROM inventory ps
-        JOIN products p ON ps.product_id = p.id
-        JOIN branches b ON ps.branch_id = b.id
-        WHERE ps.product_id = ? AND ps.branch_id = ?
-      `);
-
-      for (const item of items) {
-        if (item.category !== 'Service') {
-          const status = checkStock.get(item.id, branchId) as any;
-          if (status && status.stock <= status.low_stock_threshold) {
-            db.prepare(`
-              INSERT INTO notifications (type, message, branch_id)
-              VALUES ('LOW_STOCK', ?, ?)
-            `).run(`Low stock alert: ${status.name} in ${status.branch_name} (${status.stock} remaining)`, branchId);
-          }
-        }
       }
 
       return saleId;
@@ -730,6 +619,9 @@ async function startServer() {
   });
 
   app.post("/api/sync", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     const { sales } = req.body;
     if (!Array.isArray(sales)) return res.status(400).json({ error: "Invalid data" });
 
@@ -741,9 +633,9 @@ async function startServer() {
           if (exists) return { success: true, alreadySynced: true };
 
           const saleInfo = db.prepare(`
-            INSERT INTO sales (branch_id, total_amount, discount_amount, payment_method, customer_id, timestamp) 
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).run(sale.branchId, sale.total, sale.discount, sale.paymentMethod, sale.customerId, sale.timestamp);
+            INSERT INTO sales (total_amount, discount_amount, payment_method, customer_id, timestamp) 
+            VALUES (?, ?, ?, ?, ?)
+          `).run(sale.total, sale.discount, sale.paymentMethod, sale.customerId, sale.timestamp);
           
           return { success: true, id: saleInfo.lastInsertRowid };
         })();
@@ -756,64 +648,52 @@ async function startServer() {
   });
 
   app.get("/api/notifications", (req, res) => {
-    const branchId = req.query.branchId as string;
-    let query = "SELECT * FROM notifications";
-    const params = [];
-    if (branchId && branchId !== 'Admin') {
-      query += " WHERE branch_id = ?";
-      params.push(branchId);
-    }
-    query += " ORDER BY timestamp DESC LIMIT 50";
-    const notifications = db.prepare(query).all(...params);
+    const db = (req as any).branchDb;
+    if (!db) return res.json([]);
+    
+    const notifications = db.prepare("SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 50").all();
     res.json(notifications);
   });
 
   app.post("/api/notifications/read", (req, res) => {
+    const db = (req as any).branchDb;
+    if (!db) return res.status(400).json({ error: "Branch context required" });
+    
     db.prepare("UPDATE notifications SET is_read = 1").run();
     res.json({ success: true });
   });
 
   app.get("/api/reports/daily", (req, res) => {
-    const date = req.query.date || new Date().toISOString().split('T')[0];
-    const branchId = req.query.branchId as string;
+    const db = (req as any).branchDb;
+    if (!db) return res.json({ sales: [], summary: { total_revenue: 0, total_transactions: 0 } });
     
-    let salesQuery = `
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    
+    const sales = db.prepare(`
       SELECT s.id, s.total_amount, s.payment_method, s.status, s.timestamp, s.discount_amount,
-             c.name as customer_name, b.name as branch_name,
+             c.name as customer_name,
              GROUP_CONCAT(COALESCE(p.name, bd.name) || ' (x' || si.quantity || ')') as items
       FROM sales s
       LEFT JOIN sale_items si ON s.id = si.sale_id
       LEFT JOIN products p ON si.product_id = p.id
       LEFT JOIN bundles bd ON si.bundle_id = bd.id
       LEFT JOIN customers c ON s.customer_id = c.id
-      LEFT JOIN branches b ON s.branch_id = b.id
       WHERE date(s.timestamp) = date(?)
-    `;
+      GROUP BY s.id 
+      ORDER BY s.timestamp DESC
+    `).all(date);
     
-    let summaryQuery = `
+    const summary = db.prepare(`
       SELECT COALESCE(SUM(total_amount), 0) as total_revenue, COUNT(*) as total_transactions
       FROM sales
       WHERE date(timestamp) = date(?) AND status = 'Completed'
-    `;
-
-    const queryParams: any[] = [date];
-    
-    if (branchId && branchId !== 'Admin') {
-      salesQuery += ` AND s.branch_id = ?`;
-      summaryQuery += ` AND branch_id = ?`;
-      queryParams.push(branchId);
-    }
-
-    salesQuery += ` GROUP BY s.id ORDER BY s.timestamp DESC`;
-
-    const sales = db.prepare(salesQuery).all(...queryParams);
-    const summary = db.prepare(summaryQuery).get(...queryParams) as { total_revenue: number, total_transactions: number };
+    `).get(date) as { total_revenue: number, total_transactions: number };
 
     res.json({ sales, summary: summary || { total_revenue: 0, total_transactions: 0 } });
   });
 
-  app.get("/api/reports/branch-performance", (req, res) => {
-    const period = req.query.period || 'daily'; // daily, weekly, monthly, yearly
+  app.get("/api/reports/performance", (req, res) => {
+    const period = req.query.period || 'daily';
     let dateFilter = '';
     
     if (period === 'daily') {
@@ -826,144 +706,27 @@ async function startServer() {
       dateFilter = "date(timestamp) >= date('now', 'localtime', 'start of year')";
     }
 
-    const performance = db.prepare(`
-      SELECT b.name, b.id, COALESCE(SUM(s.total_amount), 0) as revenue, COUNT(s.id) as transactions
-      FROM branches b
-      LEFT JOIN sales s ON b.id = s.branch_id AND s.status = 'Completed' AND ${dateFilter}
-      WHERE b.id != 'Admin'
-      GROUP BY b.id
-      ORDER BY revenue DESC
-    `).all();
-
-    res.json(performance);
-  });
-
-  app.get("/api/reports/export", (req, res) => {
-    const period = req.query.period || 'daily';
-    const branchId = req.query.branchId as string;
-    let dateFilter = '';
-    const params: any[] = [];
-
-    if (period === 'daily') {
-      dateFilter = "date(s.timestamp) = date(?)";
-      params.push(req.query.date || new Date().toISOString().split('T')[0]);
-    } else if (period === 'weekly') {
-      dateFilter = "date(s.timestamp) >= date(?, '-6 days') AND date(s.timestamp) <= date(?)";
-      const endDate = req.query.date || new Date().toISOString().split('T')[0];
-      params.push(endDate, endDate);
-    } else if (period === 'monthly') {
-      dateFilter = "strftime('%Y-%m', s.timestamp) = strftime('%Y-%m', ?)";
-      params.push(req.query.date || new Date().toISOString().split('T')[0]);
-    } else if (period === 'yearly') {
-      dateFilter = "strftime('%Y', s.timestamp) = strftime('%Y', ?)";
-      params.push(req.query.date || new Date().toISOString().split('T')[0]);
-    }
-
-    let query = `
-      SELECT s.id, s.timestamp, s.total_amount, s.payment_method, s.status, s.discount_amount,
-             c.name as customer_name, b.name as branch_name,
-             GROUP_CONCAT(COALESCE(p.name, bd.name) || ' (x' || si.quantity || ')') as items
-      FROM sales s
-      LEFT JOIN sale_items si ON s.id = si.sale_id
-      LEFT JOIN products p ON si.product_id = p.id
-      LEFT JOIN bundles bd ON si.bundle_id = bd.id
-      LEFT JOIN customers c ON s.customer_id = c.id
-      LEFT JOIN branches b ON s.branch_id = b.id
-      WHERE ${dateFilter}
-    `;
-
-    if (branchId && branchId !== 'Admin') {
-      query += ` AND s.branch_id = ?`;
-      params.push(branchId);
-    }
-
-    query += ` GROUP BY s.id ORDER BY s.timestamp DESC`;
-
-    const sales = db.prepare(query).all(...params);
-    res.json(sales);
-  });
-
-  app.post("/api/sales/:id/refund", (req, res) => {
-    const { id } = req.params;
-    const { refundToStoreCredit } = req.body;
-    const saleId = parseInt(id);
-    
-    const transaction = db.transaction(() => {
-      const sale = db.prepare("SELECT status, total_amount, customer_id, branch_id FROM sales WHERE id = ?").get(saleId) as any;
-      if (!sale || sale.status === 'Refunded') {
-        throw new Error("Sale already refunded or not found");
-      }
-
-      // Update sale status
-      db.prepare("UPDATE sales SET status = 'Refunded' WHERE id = ?").run(saleId);
-
-      // Restore stock for regular items
-      const items = db.prepare(`
-        SELECT si.product_id, si.variant_id, si.bundle_id, si.quantity, p.category 
-        FROM sale_items si
-        LEFT JOIN products p ON si.product_id = p.id
-        WHERE si.sale_id = ?
-      `).all(saleId) as any[];
-
-      const updateStock = db.prepare("UPDATE inventory SET stock = stock + ? WHERE product_id = ? AND branch_id = ?");
-      const updateVariantStock = db.prepare("UPDATE variant_stocks SET stock = stock + ? WHERE variant_id = ? AND branch_id = ?");
-
-      for (const item of items) {
-        if (item.variant_id) {
-          updateVariantStock.run(item.quantity, item.variant_id, sale.branch_id);
-        } else if (item.product_id && item.category !== 'Service') {
-          updateStock.run(item.quantity, item.product_id, sale.branch_id);
-        } else if (item.bundle_id) {
-          const bItems = db.prepare("SELECT product_id, quantity FROM bundle_items WHERE bundle_id = ?").all(item.bundle_id) as any[];
-          for (const bi of bItems) {
-            const prod = db.prepare("SELECT category FROM products WHERE id = ?").get(bi.product_id) as any;
-            if (prod.category !== 'Service') {
-              updateStock.run(bi.quantity * item.quantity, bi.product_id, sale.branch_id);
-            }
-          }
-        }
-      }
-
-      // Handle store credit refund
-      if (refundToStoreCredit && sale.customer_id) {
-        db.prepare("UPDATE customers SET store_credit = store_credit + ? WHERE id = ?").run(sale.total_amount, sale.customer_id);
-      }
+    const performance = branches.map(b => {
+      const bDb = getBranchDb(b.id);
+      const stats = bDb.prepare(`
+        SELECT COALESCE(SUM(total_amount), 0) as revenue, COUNT(*) as transactions
+        FROM sales
+        WHERE status = 'Completed' AND ${dateFilter}
+      `).get() as any;
+      return {
+        id: b.id,
+        name: b.name,
+        revenue: stats.revenue,
+        transactions: stats.transactions
+      };
     });
 
-    try {
-      transaction();
-      res.json({ success: true });
-    } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
-    }
+    res.json(performance.sort((a, b) => b.revenue - a.revenue));
   });
 
-  app.get("/api/reports/inventory-status", (req, res) => {
-    const branchId = req.query.branchId as string;
-    let lowStock;
-    if (branchId && branchId !== 'Admin') {
-      lowStock = db.prepare(`
-        SELECT p.*, ps.stock 
-        FROM products p 
-        JOIN inventory ps ON p.id = ps.product_id 
-        WHERE ps.branch_id = ? AND ps.stock <= 100 AND p.category != 'Service'
-      `).all(branchId);
-    } else {
-      lowStock = db.prepare(`
-        SELECT p.*, SUM(ps.stock) as stock 
-        FROM products p 
-        JOIN inventory ps ON p.id = ps.product_id 
-        WHERE p.category != 'Service'
-        GROUP BY p.id
-        HAVING SUM(ps.stock) <= 100
-      `).all();
-    }
-    res.json(lowStock);
-  });
-
-  // User Management Routes
+  // User Management Routes (Central DB)
   app.get("/api/users", (req, res) => {
-    const users = db.prepare(`
+    const users = centralDb.prepare(`
       SELECT u.id, u.username, u.role, u.branch_id, b.name as branch_name 
       FROM users u 
       LEFT JOIN branches b ON u.branch_id = b.id
@@ -975,13 +738,12 @@ async function startServer() {
   app.post("/api/users", (req, res) => {
     const { username, password, role, branch_id } = req.body;
     try {
-      const info = db.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)")
+      const info = centralDb.prepare("INSERT INTO users (username, password, role, branch_id) VALUES (?, ?, ?, ?)")
         .run(username, password, role, branch_id);
-      const user = db.prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?").get(info.lastInsertRowid);
+      const user = centralDb.prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?").get(info.lastInsertRowid);
       res.json(user);
     } catch (error) {
-      console.error('Create user error:', error);
-      res.status(500).json({ error: "Failed to create user. Username might already be taken." });
+      res.status(500).json({ error: "Failed to create user." });
     }
   });
 
@@ -991,27 +753,25 @@ async function startServer() {
     
     try {
       if (password) {
-        db.prepare("UPDATE users SET username = ?, password = ?, role = ?, branch_id = ? WHERE id = ?")
+        centralDb.prepare("UPDATE users SET username = ?, password = ?, role = ?, branch_id = ? WHERE id = ?")
           .run(username, password, role, branch_id, id);
       } else {
-        db.prepare("UPDATE users SET username = ?, role = ?, branch_id = ? WHERE id = ?")
+        centralDb.prepare("UPDATE users SET username = ?, role = ?, branch_id = ? WHERE id = ?")
           .run(username, role, branch_id, id);
       }
-      const user = db.prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?").get(id);
+      const user = centralDb.prepare("SELECT u.*, b.name as branch_name FROM users u LEFT JOIN branches b ON u.branch_id = b.id WHERE u.id = ?").get(id);
       res.json(user);
     } catch (error) {
-      console.error('Update user error:', error);
-      res.status(500).json({ error: "Failed to update user credentials. Username might already be taken." });
+      res.status(500).json({ error: "Failed to update user." });
     }
   });
 
   app.delete("/api/users/:id", (req, res) => {
     const { id } = req.params;
     try {
-      db.prepare("DELETE FROM users WHERE id = ?").run(id);
+      centralDb.prepare("DELETE FROM users WHERE id = ?").run(id);
       res.json({ success: true });
     } catch (error) {
-      console.error('Delete user error:', error);
       res.status(500).json({ error: "Failed to delete user." });
     }
   });
