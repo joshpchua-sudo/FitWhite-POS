@@ -1,5 +1,5 @@
 export type Theme = 'light' | 'dark' | 'clinic' | 'neopos';
-export type View = 'pos' | 'inventory' | 'reports' | 'history' | 'customers' | 'bundles' | 'branches' | 'users' | 'settings';
+export type View = 'pos' | 'inventory' | 'reports' | 'history' | 'customers' | 'bundles' | 'branches' | 'users' | 'settings' | 'hq';
 export type PaymentMethod = 'Cash' | 'Card' | 'GCash' | 'Store Credit';
 
 export interface Branch {

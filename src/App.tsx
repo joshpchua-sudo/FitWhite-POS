@@ -14,6 +14,7 @@ import { Bundles } from './pages/Bundles';
 import { Branches } from './pages/Branches';
 import { Users } from './pages/Users';
 import { Settings } from './pages/Settings';
+import { HQDashboard } from './pages/HQDashboard';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -22,6 +23,7 @@ export default function App() {
     user, 
     setUser,
     currentView, 
+    setCurrentView,
     theme, 
     setBranches, 
     setIsOnline, 
@@ -37,6 +39,9 @@ export default function App() {
 
   useEffect(() => {
     apiClient.setBranchId(selectedBranchId);
+    if (selectedBranchId === 'Admin' && user?.role === 'SUPER_ADMIN') {
+      setCurrentView('hq');
+    }
   }, [selectedBranchId]);
 
   useEffect(() => {
@@ -72,6 +77,7 @@ export default function App() {
 
   const renderView = () => {
     switch (currentView) {
+      case 'hq': return <HQDashboard />;
       case 'pos': return <POS />;
       case 'inventory': return <Inventory />;
       case 'reports': return <Reports />;

@@ -136,6 +136,9 @@ export function Sidebar() {
           )}
 
           <nav className="space-y-1">
+            {user.role === 'SUPER_ADMIN' && selectedBranchId === 'Admin' && (
+              <NavItem active={currentView === 'hq'} onClick={() => { setCurrentView('hq'); setIsSidebarOpen(false); }} icon={<Globe size={20} />} label="HQ Dashboard" theme={theme} />
+            )}
             <NavItem active={currentView === 'pos'} onClick={() => { setCurrentView('pos'); setIsSidebarOpen(false); }} icon={<ShoppingCart size={20} />} label="Terminal" theme={theme} />
             <NavItem active={currentView === 'customers'} onClick={() => { setCurrentView('customers'); setIsSidebarOpen(false); }} icon={<Users size={20} />} label="Customers" theme={theme} />
             {(user.role === 'SUPER_ADMIN' || user.role === 'BRANCH_MANAGER') && (

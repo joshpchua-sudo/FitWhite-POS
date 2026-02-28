@@ -727,6 +727,43 @@ async function startServer() {
     res.json(performance.sort((a, b) => b.revenue - a.revenue));
   });
 
+  app.get("/api/hq/stats", (req, res) => {
+    try {
+      const totalSales = branches.reduce((acc, b) => {
+        const bDb = getBranchDb(b.id);
+        const stats = bDb.prepare("SELECT COALESCE(SUM(total_amount), 0) as revenue FROM sales WHERE status = 'Completed'").get() as any;
+        return acc + stats.revenue;
+      }, 0);
+
+      const totalTransactions = branches.reduce((acc, b) => {
+        const bDb = getBranchDb(b.id);
+        const stats = bDb.prepare("SELECT COUNT(*) as transactions FROM sales WHERE status = 'Completed'").get() as any;
+        return acc + stats.transactions;
+      }, 0);
+
+      const totalCustomers = branches.reduce((acc, b) => {
+        const bDb = getBranchDb(b.id);
+        const stats = bDb.prepare("SELECT COUNT(*) as count FROM customers").get() as any;
+        return acc + stats.count;
+      }, 0);
+
+      const lowStockAlerts = branches.reduce((acc, b) => {
+        const bDb = getBranchDb(b.id);
+        const alerts = bDb.prepare("SELECT COUNT(*) as count FROM inventory WHERE stock <= 10").get() as any;
+        return acc + alerts.count;
+      }, 0);
+
+      res.json({
+        totalSales,
+        totalTransactions,
+        totalCustomers,
+        lowStockAlerts
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch HQ stats" });
+    }
+  });
+
   // User Management Routes (Central DB)
   app.get("/api/users", (req, res) => {
     const users = centralDb.prepare(`

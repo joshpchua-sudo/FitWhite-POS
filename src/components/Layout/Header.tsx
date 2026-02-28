@@ -2,7 +2,7 @@ import React from 'react';
 import { useUserStore } from '../../store/userStore';
 import { useCartStore } from '../../store/useCartStore';
 import { cn } from '../../lib/utils';
-import { Menu, Globe, AlertTriangle, LogOut, Bell } from 'lucide-react';
+import { Menu, Globe, AlertTriangle, LogOut, Bell, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface HeaderProps {
@@ -48,6 +48,13 @@ export function Header({ onMenuClick, onLogout }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3 lg:gap-6">
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <Building2 size={14} className="text-slate-400" />
+          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            {selectedBranchId === 'Admin' ? 'HQ Central' : currentBranch.name}
+          </span>
+        </div>
+
         {!isOnline && (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 px-2 py-1 bg-rose-500 text-white text-[10px] font-bold rounded-lg animate-pulse">

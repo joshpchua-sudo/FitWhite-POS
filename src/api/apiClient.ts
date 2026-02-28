@@ -47,6 +47,11 @@ export const apiClient = {
     return res.json();
   },
 
+  async fetchHQStats(): Promise<{ totalSales: number, totalTransactions: number, totalCustomers: number, lowStockAlerts: number }> {
+    const res = await fetch(`${API_BASE}/hq/stats`);
+    return res.json();
+  },
+
   async fetchNotifications(branchId: string): Promise<any[]> {
     const res = await fetch(`${API_BASE}/notifications?branchId=${branchId}`, {
       headers: { 'x-branch-id': branchId }
